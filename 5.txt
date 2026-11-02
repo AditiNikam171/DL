@@ -1,10 +1,7 @@
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras import backend as K
-from tensorflow.keras.layers import Dense, Embedding, Input, Lambda
+from collections import Counter
+from tensorflow.keras.layers import Dense, Embedding, GlobalAveragePooling1D, Input
 from tensorflow.keras.models import Model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.utils import to_categorical
 
 # --- 1. Prepare the Dataset ---
@@ -17,20 +14,21 @@ corpus = [
 ]
 
 # --- 2. Tokenize and Create Word-to-Index Mappings ---
-tokenizer = Tokenizer()
-tokenizer.fit_on_texts(corpus)
-word_index = tokenizer.word_index
+# Index 0 is reserved for padding; words start at 1 (most frequent first).
+tokenized = [sentence.lower().split() for sentence in corpus]
+counts = Counter(word for sent in tokenized for word in sent)
+word_index = {word: i + 1 for i, (word, _) in enumerate(counts.most_common())}
 vocab_size = len(word_index) + 1
 print(f"Vocabulary Size: {vocab_size}")
 
+sequences = [[word_index[w] for w in sent] for sent in tokenized]
+
 # --- 3. Generate CBOW Training Data ---
-sequences = tokenizer.texts_to_sequences(corpus)
 window_size = 2
 data = []
 
 for sequence in sequences:
     for i, word in enumerate(sequence):
-        # Create a list for context words (left and right within window)
         context = []
         for j in range(i - window_size, i + window_size + 1):
             if j != i and 0 <= j < len(sequence):
@@ -38,41 +36,37 @@ for sequence in sequences:
         if context:
             data.append((context, word))
 
-# Separate context arrays (X) and target word arrays (y)
 X_context = [item[0] for item in data]
 y_target = np.array([item[1] for item in data])
 
-# Pad the context sequences to ensure a uniform shape matrix
+# Pad contexts with 0 (post-padding) to a uniform length
 max_len = max(len(x) for x in X_context)
-X_context_padded = pad_sequences(X_context, maxlen=max_len, padding="post")
+X_context_padded = np.zeros((len(X_context), max_len), dtype="int32")
+for i, ctx in enumerate(X_context):
+    X_context_padded[i, : len(ctx)] = ctx
+
 y_target_one_hot = to_categorical(y_target, num_classes=vocab_size)
 
 # --- 4. Build the CBOW Model (Functional API) ---
 embedding_dim = 100
 
-# Input placeholder layer
 input_context = Input(shape=(max_len,), name="Context_Input")
 
-# Embedding layer to convert word indices to dense continuous vectors
+# mask_zero=True makes the model ignore the padding (index 0)
 embedding_layer = Embedding(
     input_dim=vocab_size,
     output_dim=embedding_dim,
+    mask_zero=True,
     name="Word_Embeddings",
 )(input_context)
 
-# Lambda layer to average the context embedding vectors
-lambda_layer = Lambda(
-    lambda x: K.mean(x, axis=1),
-    output_shape=(embedding_dim,),
-    name="Average_Context",
-)(embedding_layer)
+# Averages only the real (unmasked) context words
+avg_context = GlobalAveragePooling1D(name="Average_Context")(embedding_layer)
 
-# Output classification layer layer using Softmax activation
 output_layer = Dense(
     vocab_size, activation="softmax", name="Target_Prediction"
-)(lambda_layer)
+)(avg_context)
 
-# Create and define structural architecture bounds
 cbow_model = Model(inputs=input_context, outputs=output_layer)
 
 # --- 5. Compile and Train the Model ---
@@ -85,17 +79,12 @@ print("\nTraining the CBOW model...")
 cbow_model.fit(X_context_padded, y_target_one_hot, epochs=500, verbose=0)
 print("Training complete.")
 
-# --- 6. Extract and Visualise Word Embeddings ---
-# Safely fetch the embedding matrix weights by name layer reference
+# --- 6. Extract Word Embeddings ---
 embedding_matrix = cbow_model.get_layer("Word_Embeddings").get_weights()[0]
 
 print("\nLearned Word Embeddings (First 5 Dimensions shown):")
-for word, idx in list(word_index.items())[:10]:  # Show first 10 words
-    if idx < vocab_size:
-        print(f"Word: '{word:<10}' Vector: {embedding_matrix[idx][:5]}")
-
-
-
+for word, idx in list(word_index.items())[:10]:
+    print(f"Word: '{word:<10}' Vector: {embedding_matrix[idx][:5]}")
 
 
 ######explanation
@@ -196,3 +185,77 @@ This code implements a Continuous Bag of Words (CBOW) model, which is a core Nat
 	• Answer: The dataset (corpus) is tiny (only 5 short sentences), meaning the model doesn't see enough contextual diversity to learn meaningful, generalizable semantic embeddings.
 • What does cbow_model.get_layer("Word_Embeddings").get_weights()[0] return?
 	• Answer: It extracts the raw 2D weight matrix (vocab_size × embedding_dim) from the Embedding layer, where row idx represents the learned embedding vector for that word.
+
+Assignment 5: Continuous Bag of Words — CBOW
+Your implementation: Context word IDs → Embedding → Average → Dense with Softmax → target word.
+
+1. What is NLP?
+Natural Language Processing is a field concerned with processing and understanding human language using computers.
+
+2. What is a corpus?
+A corpus is a collection of text used to train or evaluate a language-processing model.
+
+3. What is tokenization?
+It divides text into units called tokens, such as words or subwords.
+
+4. What is a vocabulary?
+It is the collection of unique tokens recognized by the model.
+
+5. What is word embedding?
+A word embedding represents a word using a dense vector of real numbers. Words used in similar contexts can learn similar vectors.
+
+6. What is Word2Vec?
+Word2Vec is a family of models for learning word embeddings. Its two main architectures are CBOW and Skip-gram.
+
+7. What is CBOW?
+Continuous Bag of Words predicts a target word from its surrounding context words.
+
+8. Give an example of CBOW.
+For “The cat sits on the mat,” context words such as “The,” “cat,” “on” and “the” can be used to predict “sits.”
+
+9. What is a context window?
+It determines how many surrounding words are considered. In the manual, window_size = 2 means up to two words on each side.
+
+10. What is the difference between CBOW and Skip-gram?
+Model	Input	Prediction
+CBOW	Surrounding context words	Centre word
+Skip-gram	Centre word	Surrounding context words
+
+
+11. Why is it called a “bag of words”?
+Standard CBOW combines context embeddings without preserving their order.
+
+12. What does the Embedding layer do?
+It maps integer word IDs to trainable dense vectors.
+
+13. What does embedding_dim = 100 mean?
+Each word is represented by a vector containing 100 learned values.
+
+14. Why do we average context embeddings?
+Averaging combines several context vectors into one fixed-size vector used to predict the target word.
+
+15. Why is padding required?
+Words near sentence boundaries have fewer context words. Padding makes all context sequences the same length for batch processing.
+
+16. Should padding affect the average?
+Ideally, no. Padding positions should be excluded using a mask-aware average. The manual’s simple mean does not explicitly exclude them.
+
+17. Why use Softmax in the output layer?
+The model chooses among vocabulary words. Softmax produces a probability distribution over them.
+
+18. Why use categorical cross-entropy?
+Predicting a target word is multiclass classification, and the manual represents target words using one-hot vectors.
+
+19. What is the difference between one-hot encoding and embeddings?
+One-hot vectors are sparse and do not directly represent word similarity. Embeddings are dense, learned vectors that can capture contextual relationships.
+
+20. Why is vocabulary size calculated as len(word_index) + 1?
+The tokenizer reserves index 0, typically for padding, so the embedding table needs an additional row.
+
+21. What is cosine similarity?
+It measures the angle-based similarity between two vectors. It is often used to compare word embeddings.
+\[
+\cos(\theta)=\a.b/||A||||B||
+\]
+22. Does this practical perform optical character recognition?
+No. Although the aim says “text recognition,” this implementation learns word embeddings by predicting words from context.

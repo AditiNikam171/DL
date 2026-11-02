@@ -1,0 +1,233 @@
+# =====================================================================
+# ASSIGNMENT 4: Autoencoder anomaly detection
+# Run in VS Code (Python Interactive / Jupyter extension) or Jupyter:
+# each '# %%' line starts a new cell. Needs: pip install tensorflow matplotlib numpy
+# =====================================================================
+
+# %% Autoencoder for anomaly detection (MNIST: normal = 3, anomaly = 7)
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Dense
+from tensorflow.keras.models import Model
+import matplotlib.pyplot as plt
+
+# 1. Setup and Data Preparation
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+x_train = x_train.astype('float32') / 255.
+x_test = x_test.astype('float32') / 255.
+
+x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+
+# Train on only one class (digit 3) = our 'normal' data
+train_normal = x_train[y_train == 3]
+test_normal = x_test[y_test == 3]
+
+# 2. Build the Autoencoder Model
+encoding_dim = 32
+input_img = Input(shape=(784,))
+
+# Encoder
+encoded = Dense(128, activation='relu')(input_img)
+encoded = Dense(64, activation='relu')(encoded)
+encoded = Dense(encoding_dim, activation='relu')(encoded)
+# Decoder
+decoded = Dense(64, activation='relu')(encoded)
+decoded = Dense(128, activation='relu')(decoded)
+decoded = Dense(784, activation='sigmoid')(decoded)
+
+autoencoder = Model(input_img, decoded)
+autoencoder.compile(optimizer='adam', loss='mse')
+autoencoder.summary()
+
+# 3. Train the Autoencoder (input = target)
+print("Training the autoencoder...")
+autoencoder.fit(train_normal, train_normal,
+                epochs=50,
+                batch_size=256,
+                shuffle=True,
+                validation_data=(test_normal, test_normal))
+
+# 4. Detect Anomalies and Visualize Results
+normal_test_data = x_test[y_test == 3]
+anomalous_test_data = x_test[y_test == 7]
+test_data = np.concatenate([normal_test_data[:100], anomalous_test_data[:100]])
+test_labels = np.array([0] * 100 + [1] * 100)   # 0 = normal, 1 = anomaly
+
+reconstructions = autoencoder.predict(test_data)
+
+# Reconstruction error (MSE) per image
+mse = np.mean(np.power(test_data - reconstructions, 2), axis=1)
+
+plt.figure(figsize=(10, 6))
+plt.hist(mse[test_labels == 0], bins=50, alpha=0.7, label='Normal (Digit 3)')
+plt.hist(mse[test_labels == 1], bins=50, alpha=0.7, label='Anomaly (Digit 7)')
+plt.title('Reconstruction Error Distribution')
+plt.xlabel('Reconstruction Error (MSE)')
+plt.ylabel('Number of Samples')
+plt.legend()
+plt.show()
+
+# Threshold = mean + 2 * std of the NORMAL errors
+threshold = np.mean(mse[test_labels == 0]) + 2 * np.std(mse[test_labels == 0])
+print(f"\nThreshold for anomaly detection: {threshold:.4f}")
+print(f"Number of anomalies detected (error > threshold): {np.sum(mse > threshold)}")
+print(f"Total number of test samples: {len(test_data)}")
+
+# Breakdown so the count above is easy to interpret
+predicted_anomaly = mse > threshold
+true_pos = np.sum(predicted_anomaly & (test_labels == 1))
+false_pos = np.sum(predicted_anomaly & (test_labels == 0))
+print(f"7s correctly flagged as anomalies: {true_pos} / 100")
+print(f"3s wrongly flagged as anomalies:   {false_pos} / 100")
+
+
+# %% [NOTES] Explanation + Viva (kept inside a string so this file still runs top to bottom)
+NOTES = r"""
+###explanation
+
+
+
+1. Setup and Data Preparation
+
+• import numpy as np
+Loads NumPy for array operations and processing math grids.
+• import tensorflow as tf
+Loads the core TensorFlow framework.
+• from tensorflow.keras.layers import Input, Dense
+Imports Input (to shape entry points) and Dense (fully connected layer blocks) from Keras.
+• from tensorflow.keras.models import Model
+Imports the Keras functional Model class, which allows for complex, branching layer pathways.
+• import matplotlib.pyplot as plt
+Loads the Matplotlib plotting tool for drawing charts and distributions.
+• (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+Downloads and splits the MNIST handwritten digits dataset into separate training and test variables.
+• x_train = x_train.astype('float32') / 255.
+• x_test = x_test.astype('float32') / 255.
+Converts image arrays to decimal format and scales pixel colors down to a stable 0.0–1.0 range.
+• x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+• x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+Flattens the 2D image grids into a long 1D list of 784 numbers (28 × 28). np.prod automatically calculates the multiplication of the width and height dimensions.
+• train_normal = x_train[y_train == 3]
+• test_normal = x_test[y_test == 3]
+Filters both sets to only keep images of the digit 3. The network will treat this single digit as its definition of "normal data."
+
+2. Building the Autoencoder Model
+
+• encoding_dim = 32
+Sets the target size of the bottleneck layer. The 784 pixels will be compressed down to just 32 values.
+• input_img = Input(shape=(784,))
+Creates the model entry layer, telling it to expect arrays containing 784 numbers.
+• encoded = Dense(128, activation='relu')(input_img)
+First step of the Encoder: shrinks the 784 numbers down to 128 using a relu activation.
+• encoded = Dense(64, activation='relu')(encoded)
+Second step of the Encoder: drops the data down further to 64 numbers.
+• encoded = Dense(encoding_dim, activation='relu')(encoded)
+Final step of the Encoder: squeezes the 64 numbers down into the 32-value bottleneck space (encoding_dim).
+• decoded = Dense(64, activation='relu')(encoded)
+First step of the Decoder: expands the compressed 32 numbers back out to 64.
+• decoded = Dense(128, activation='relu')(decoded)
+Second step of the Decoder: scales the data up to 128 numbers.
+• decoded = Dense(784, activation='sigmoid')(decoded)
+Final step of the Decoder: scales the data back to its original 784 size. It uses sigmoid to output values strictly between 0.0 and 1.0 (matching our normalized pixels).
+• autoencoder = Model(input_img, decoded)
+Assembles the structural pipeline by binding the starting input_img layer directly to the final decoded output layer.
+• autoencoder.compile(optimizer='adam', loss='mse')
+Configures the network training engine using the Adam optimizer and Mean Squared Error (MSE) loss, which measures pixel-by-pixel reconstruction accuracy.
+• autoencoder.summary()
+Prints out a chart illustrating layer paths, shape changes, and internal network parameters.
+
+3. Training the Autoencoder
+
+• print("Training the autoencoder...")
+Prints a message to the console window indicating that training is starting.
+• autoencoder.fit(train_normal, train_normal, epochs=50, batch_size=256, shuffle=True, validation_data=(test_normal, test_normal))
+Launches the training loop. Notice that both the input and the target are train_normal—the network is learning to copy its inputs. It updates its weights after looking at groups of 256 images, shuffles the data order, runs for 50 cycles (epochs), and checks its work against test_normal.
+
+4. Detect Anomalies and Visualize Results
+
+• normal_test_data = x_test[y_test == 3]
+Extracts test set images containing the digit 3 (normal data).
+• anomalous_test_data = x_test[y_test == 7]
+Extracts test set images containing the digit 7 (anomalous data).
+• test_data = np.concatenate([normal_test_data[:100], anomalous_test_data[:100]])
+Combines the first 100 normal images (3s) and the first 100 anomaly images (7s) into a single testing block of 200 images.
+• test_labels = np.array([0] * 100 + [1] * 100)
+Creates an answer key array containing 100 zeros (representing normal data) followed by 100 ones (representing anomalies).
+• reconstructions = autoencoder.predict(test_data)
+Passes the mixed 200 images through the trained autoencoder to see how well it can rebuild them.
+• mse = np.mean(np.power(test_data - reconstructions, 2), axis=1)
+Calculates the reconstruction error for each image. It finds the difference between the original pixels and the rebuilt pixels, squares them, and takes the average across the image columns (axis=1).
+• plt.figure(figsize=(10, 6))
+Creates a new visualization window that is 10 inches wide by 6 inches tall.
+• plt.hist(mse[test_labels == 0], bins=50, alpha=0.7, label='Normal (Digit 3)')
+Plots a histogram showing the distribution of reconstruction errors for the normal images (digit 3).
+• plt.hist(mse[test_labels == 1], bins=50, alpha=0.7, label='Anomaly (Digit 7)')
+Overlays a histogram showing the distribution of reconstruction errors for the anomaly images (digit 7).
+• plt.title('Reconstruction Error Distribution')
+Sets the main heading title for the chart window.
+• plt.xlabel('Reconstruction Error (MSE)')
+Labels the horizontal axis line to indicate the error scale.
+• plt.ylabel('Number of Samples')
+Labels the vertical axis line to count how many images fall into each error bin.
+• plt.legend()
+Draws a color-coded key index box on the chart to tell the two digit distributions apart.
+• plt.show()
+Renders the finalized graphical chart onto your computer screen.
+• threshold = np.mean(mse[test_labels == 0]) + 2 * np.std(mse[test_labels == 0])
+Calculates a mathematical cutoff boundary line. It takes the average error of the normal data and adds two standard deviations to it. Anything with an error higher than this threshold will be flagged as an anomaly.
+• print(f"\nThreshold for anomaly detection: {threshold:.4f}")
+Prints the final calculated mathematical boundary point out to 4 decimal places.
+• print(f"Number of anomalies detected (error > threshold): {np.sum(mse > threshold)}")
+Counts how many test images had a higher reconstruction error than our cutoff line and prints out the result.
+• print(f"Total number of test samples: {len(test_data)}")
+Prints out the total number of mixed testing files evaluated (which will be 200).
+• predicted_anomaly = mse > threshold
+• true_pos = np.sum(predicted_anomaly & (test_labels == 1))
+• false_pos = np.sum(predicted_anomaly & (test_labels == 0))
+Splits the flagged count into correct detections (7s flagged) and false alarms (3s flagged). The earlier 'anomalies detected' number mixes both, so this shows how good the detector really is.
+
+########Viva 
+
+
+
+🧱 Architecture & Foundational Theory
+
+• What is an Autoencoder, and what type of machine learning does it use?
+	• Answer: An Autoencoder is a neural network designed to learn a compressed representation of input data and then reconstruct that input as closely as possible. It uses Unsupervised Learning (or self-supervised learning) because it does not require external target class labels.
+• What are the two primary components of an Autoencoder?
+	• Answer:
+		1. Encoder: Compresses high-dimensional input data into a lower-dimensional bottleneck.
+		2. Decoder: Takes the compressed bottleneck data and attempts to reconstruct the original input back to its full dimensions.
+• What do you mean by "Latent Space" or "Bottleneck Layer" in an Autoencoder?
+	• Answer: It is the central, lowest-dimensional layer in the network (in our code, encoding_dim = 32). It forces the network to dump noise and redundant details, keeping only the most critical, high-level features of the input data.
+• Why did you use the Keras Functional API instead of Sequential() for this model?
+	• Answer: The Functional API is more flexible and handles complex, non-linear routing better. It explicitly shows the data flow tensor by tensor—passing the output of the previous layer as an input argument to the next layer (e.g., Dense(...)(input_img)).
+
+🔎 Anomaly Detection Mechanism
+
+• Explain the core logic of how an Autoencoder acts as an Anomaly Detector.
+	• Answer: We train the model only on a specific "normal" dataset (e.g., the digit '3'). The network becomes highly efficient at compressing and reconstructing '3'. When an anomaly (e.g., the digit '7') is fed into the model, the network fails to reconstruct it properly because it doesn't fit the learned pattern. This failure results in a high reconstruction error, which flags it as an anomaly.
+• What is "Reconstruction Error," and how is it measured in your code?
+	• Answer: It is the mathematical difference between the original input image and the image rebuilt by the decoder. In our code, it is measured using Mean Squared Error (MSE) via the formula np.mean(np.power(test_data - reconstructions, 2), axis=1).
+• How did you mathematically establish the threshold for declaring a sample an anomaly?
+	• Answer: The threshold is defined statistically based on the distribution of normal errors:
+\(\text{Threshold}=\text{Mean\ of\ Normal\ MSE}+(2\times \text{Standard\ Deviation\ of\ Normal\ MSE})\)
+Any test sample whose reconstruction error exceeds this threshold boundary is classified as an anomaly.
+
+🛠️ Code Implementations & Configurations
+
+• Why is the model compiled with loss='mse' instead of cross-entropy?
+	• Answer: Because this is a reconstruction task, not a classification task. We are measuring the continuous numerical distance between input pixel values and output pixel values, making Mean Squared Error the mathematically correct loss function.
+• Why is the output layer's activation set to sigmoid?
+	• Answer: Our input pixel data was normalized between 0.0 and 1.0. The sigmoid function squashes output node activations strictly into the [0.0, 1.0] range, ensuring the reconstructed pixel values match the range of the input images.
+• Why did you pass train_normal twice in the model.fit() function?
+	• Answer: In an autoencoder, the input data is also the target output. By running model.fit(train_normal, train_normal), we tell the network to check its performance by comparing its final generated output against the exact input it received.
+
+📊 Contrast & Comparison
+
+• What is the core structural difference between your CNN in Assignment 3 and the Autoencoder in Assignment 4?
+	• Answer:
+		• CNN (Assignment 3): Reduces spatial grid sizes to output a 1D array of 10 class probabilities via a Softmax layer (Supervised Classification).
+		• Autoencoder (Assignment 4): Compresses data but then expands it back to match the exact same dimensions as the original input layer via a Sigmoid layer (Unsupervised Reconstruction).
+"""

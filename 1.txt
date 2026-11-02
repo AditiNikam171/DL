@@ -351,3 +351,54 @@ Group 4: Theano
 	• Answer: It takes the abstract symbolic mathematical graph you designed and compiles it into highly optimized machine code (C code) that can process actual NumPy array inputs.
 • What is the status of Theano today?
 	• Answer: Theano was officially discontinued in 2017, and its direct, actively maintained open-source successor is called PyTensor.
+
+1. What is deep learning?
+Deep learning is a branch of machine learning that uses neural networks with multiple layers to learn patterns from data.
+
+2. What is the difference between machine learning and deep learning?
+Traditional machine learning often requires manual feature extraction. Deep learning can learn useful features automatically, but usually needs more data and computation.
+
+3. What is a deep learning framework?
+It is a library that provides tools to build, train and evaluate neural networks, including layers, automatic differentiation and optimizers.
+
+4. What is TensorFlow?
+TensorFlow is an open-source framework for numerical computation and machine learning. It works with tensors and supports model training on CPUs and GPUs.
+
+5. What is Keras?
+Keras is a high-level API for building neural networks. It provides convenient components such as layers, models, losses and optimizers. Our practical uses tensorflow.keras.
+
+6. What is PyTorch?
+PyTorch is a deep learning framework that provides tensor operations, automatic differentiation and neural network components.
+
+7. What is Theano?
+Theano is a numerical computation library that represents mathematical expressions symbolically and computes their derivatives. It was an important foundation for early deep learning tools.
+
+8. What is a tensor?
+A tensor is a multidimensional collection of numerical values.
+Tensor rank	Example
+0	Scalar: 5
+1	Vector: [1, 2, 3]
+2	Matrix
+3	Colour image: height × width × channels
+4	Batch of colour images
+
+
+9. What is automatic differentiation?
+It automatically calculates derivatives of computations. Neural networks use it to calculate gradients needed for updating weights.
+
+10. What is a computation graph?
+It represents a computation using nodes for operations and connections for the data flowing between them.
+
+11. Why are GPUs used in deep learning?
+GPUs perform many calculations in parallel, making large matrix and tensor operations faster.
+
+12. What are the main PyTorch modules?
+- torch: Tensor operations.
+- torch.nn: Neural network layers and losses.
+- torch.optim: Optimization algorithms.
+- torch.autograd: Automatic differentiation.
+13. What is the difference between Sequential and Functional models?
+A Sequential model is a simple stack of layers. The Functional API supports more complex structures, such as multiple inputs, multiple outputs and branching.
+
+14. What are the main steps in building a Keras model?
+Prepare data → define the model → compile → train using fit() → evaluate → predict.

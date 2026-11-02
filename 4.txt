@@ -215,3 +215,75 @@ Any test sample whose reconstruction error exceeds this threshold boundary is cl
 	• Answer:
 		• CNN (Assignment 3): Reduces spatial grid sizes to output a 1D array of 10 class probabilities via a Softmax layer (Supervised Classification).
 		• Autoencoder (Assignment 4): Compresses data but then expands it back to match the exact same dimensions as the original input layer via a Sigmoid layer (Unsupervised Reconstruction).
+
+
+Assignment 4: Autoencoder for Anomaly Detection
+Your implementation: Train on MNIST digit 3 as normal data; compare reconstruction errors for digits 3 and 7.
+
+1. What is an autoencoder?
+An autoencoder is a neural network trained to reconstruct its input, usually through a compressed internal representation.
+
+2. What are its main parts?
+Encoder, latent representation or bottleneck, and decoder.
+
+3. What does the encoder do?
+It converts the input into a smaller representation containing useful information.
+
+4. What is latent space?
+It is the learned representation of the input. In this practical, each 784-value image is represented by 32 values at the bottleneck.
+
+5. What does the decoder do?
+It reconstructs the input from the latent representation.
+
+6. Why is a bottleneck used?
+It limits the information the network can pass directly, encouraging it to learn useful structure.
+
+7. Is an autoencoder supervised or unsupervised?
+It is commonly described as unsupervised because it does not need externally supplied target labels. More precisely, reconstruction training is self-supervised because the input supplies its own target.
+
+8. Why do we use fit(train_normal, train_normal)?
+The desired output is the input itself, so both inputs and targets contain the same normal examples.
+
+9. What is anomaly detection?
+It identifies observations that differ significantly from expected normal patterns.
+
+10. How does an autoencoder detect anomalies?
+It learns to reconstruct normal examples. Unusual examples may reconstruct poorly and produce higher reconstruction errors.
+
+11. What is reconstruction error?
+It measures the difference between an input and its reconstruction. The practical uses mean squared error:
+\[
+\operatorname{MSE}=\frac{1}{n}\sum_{i=1}^{n}(x_i-\hat{x}_i)^2
+\]
+12. Why train only on digit 3?
+Digit 3 defines the normal pattern. Digit 7 is treated as an anomaly relative to that learned pattern.
+
+13. Why does the output layer contain 784 neurons?
+The reconstructed output must match the 784 pixel values of the flattened input image.
+
+14. Why is Sigmoid used in the output layer?
+Sigmoid produces values between 0 and 1, matching the range of normalized pixels.
+
+15. What is the anomaly threshold?
+It is a cutoff for reconstruction error. If a sample’s error exceeds the threshold, it is classified as anomalous.
+
+16. Which threshold does the manual use?
+\[
+T=\mu_{\text{normal error}}+2\sigma_{\text{normal error}}
+\]
+A sample is marked anomalous when its reconstruction error is greater than \(T\).
+
+17. How should we choose the threshold properly?
+Use a separate normal validation set, or labelled validation examples if available. Select a threshold based on the acceptable balance between false alarms and missed anomalies.
+
+18. Does an anomaly always have high reconstruction error?
+No. Some anomalies may reconstruct well, and unusual normal examples may reconstruct poorly. Detection is not guaranteed.
+
+19. What is the difference between an autoencoder and PCA?
+PCA learns a linear low-dimensional representation. An autoencoder with nonlinear activations can learn nonlinear representations.
+
+20. How do we evaluate anomaly detection?
+With labelled evaluation data, use precision, recall, F1-score and a confusion matrix. Accuracy alone can be misleading when anomalies are rare.
+
+21. Where are autoencoders used?
+Anomaly detection, denoising, dimensionality reduction and representation learning.

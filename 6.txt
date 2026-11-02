@@ -1,31 +1,30 @@
 import os
+
+# Set these BEFORE importing TensorFlow/Keras.
+# For reliable offline use, replace with a fixed path, e.g. r"D:\ml_project"
+BASE_DIR = os.getcwd()
+os.environ["KERAS_HOME"] = os.path.join(BASE_DIR, "my_keras_cache")
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
 import tensorflow as tf
-import numpy as np
-import matplotlib.pyplot as plt
 from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
-# Adjust local logging
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-# --- 1. Prepare and Preprocess the Dataset (Using Built-in CIFAR-10) ---
-print("Loading built-in dataset safely from Keras local repository...")
-# CIFAR-10 has 10 classes and contains 32x32 images
+# --- 1. Prepare and Preprocess the Dataset (CIFAR-10) ---
+print("Loading CIFAR-10 (downloads on first run, then loads from cache)...")
 (x_train_raw, y_train_raw), (x_test_raw, y_test_raw) = tf.keras.datasets.cifar10.load_data()
 
 num_classes = 10
 print(f"Number of classes in dataset: {num_classes}")
 
-# Simple preprocessing function to resize and normalize images
 def preprocess_image_pipeline(images, labels):
-    # Convert numpy arrays to TensorFlow tensors
-    images = tf.cast(images, dtype=tf.float32)
-    # Normalize pixel values from [0, 255] to [0, 1]
-    images = images / 255.0
-    # Upscale images from 32x32 to your exact requested MobileNet shape (96x96)
+    images = tf.cast(images, tf.float32)
+    # Upscale 32x32 -> 96x96 (values stay in 0-255)
     images = tf.image.resize(images, (96, 96))
+    # Scale to [-1, 1], which is what MobileNetV2 was trained with
+    images = preprocess_input(images)
     return images, labels
 
-# Build highly optimized tf.data input streams
 batch_size = 32
 
 ds_train = tf.data.Dataset.from_tensor_slices((x_train_raw, y_train_raw))
@@ -38,94 +37,78 @@ ds_test = ds_test.map(preprocess_image_pipeline, num_parallel_calls=tf.data.AUTO
 
 
 # --- 2. Load Pre-trained CNN Model (Step a) ---
-print("\nLoading pre-trained MobileNetV2 base network with custom shape...")
-# Integration of your requested base_model parameters
+print("\nLoading pre-trained MobileNetV2 base network...")
 base_model = MobileNetV2(
-    weights='imagenet', 
-    include_top=False, 
-    input_shape=(96, 96, 3)
+    weights="imagenet",   # downloads once, then loads from my_keras_cache/models/
+    include_top=False,
+    input_shape=(96, 96, 3),
 )
 
 
 # --- 3. Freeze Parameters in Lower Layers (Step b) ---
-print("Freezing lower convolutional weights...")
-base_model.trainable = False 
+print("Freezing base model weights...")
+base_model.trainable = False
 
 
 # --- 4. Add Custom Trainable Classifier (Step c) ---
-print("Building custom structural network architecture...")
+print("Building the custom classifier...")
 inputs = tf.keras.Input(shape=(96, 96, 3), name="Input_Image")
 
-# Pass inputs through the frozen base feature extractor
 x = base_model(inputs, training=False)
-
-# Convert feature maps to a standard 1D feature vector
 x = tf.keras.layers.GlobalAveragePooling2D(name="Global_Average_Pooling")(x)
-
-# Custom classifier layers with trainable parameters
-x = tf.keras.layers.Dense(256, activation='relu', name="Dense_Trainable_1")(x)
+x = tf.keras.layers.Dense(256, activation="relu", name="Dense_Trainable_1")(x)
 x = tf.keras.layers.Dropout(0.3, name="Dropout_Regularization")(x)
+outputs = tf.keras.layers.Dense(num_classes, activation="softmax", name="Output_Predictions")(x)
 
-# Output classification layer corresponding to new dataset classes
-outputs = tf.keras.layers.Dense(num_classes, activation='softmax', name="Output_Predictions")(x)
-
-# Assemble structural model boundaries
 model = tf.keras.Model(inputs=inputs, outputs=outputs, name="Transfer_Learning_Classifier")
 
-# Compile the setup
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"],
 )
 model.summary()
 
 
 # --- 5. Train Classifier Layers (Step d) ---
-# Keeping epochs short (2) so it executes quickly during your lab evaluation
 epochs_initial = 2
 print(f"\nTraining custom classifier layers for {epochs_initial} epochs...")
 history = model.fit(
     ds_train,
     epochs=epochs_initial,
-    validation_data=ds_test
+    validation_data=ds_test,
 )
 
 
-# --- 6. Fine-Tuning: Unfreeze More Layers & Train (Step e) ---
+# --- 6. Fine-Tuning: Unfreeze Top Layers & Train (Step e) ---
 print("\n[Fine-Tuning Process Started]")
-# Unfreeze base model weights
 base_model.trainable = True
 
-# Refened constraint: Keep lower layers frozen, unfreeze top convolutional layers
-# MobileNetV2 contains 154 layers. We unfreeze everything from layer 100 onwards.
+# Keep lower layers frozen, unfreeze from layer 100 onwards
 fine_tune_at = 100
 for layer in base_model.layers[:fine_tune_at]:
     layer.trainable = False
 
-# Recompile the model with a lower learning rate to prevent exploding gradients
+# Recompile with a lower learning rate (required after changing trainable flags)
 model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), 
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"],
 )
-print("Updated layer trainability statuses:")
-print(f"Base Model Layers: {len(base_model.layers)} | Trainable Layers: {len(base_model.layers) - fine_tune_at}")
+print(f"Base Model Layers: {len(base_model.layers)} | "
+      f"Unfrozen Layers: {len(base_model.layers) - fine_tune_at}")
 
 epochs_fine = 2
 total_epochs = epochs_initial + epochs_fine
 
-print(f"\nFine-tuning model for an additional {epochs_fine} epochs...")
+print(f"\nFine-tuning for an additional {epochs_fine} epochs...")
 history_fine = model.fit(
     ds_train,
     epochs=total_epochs,
     initial_epoch=history.epoch[-1] + 1,
-    validation_data=ds_test
+    validation_data=ds_test,
 )
 print("\nTraining workflow execution complete.")
-
-
-
 
 ######explanation
 
@@ -227,3 +210,84 @@ Q7. Why did you drop the learning rate from 0.001 in the initial training step t
 Q8. Explain your exact implementation logic behind the fine_tune_at = 100 condition loop.
 
 • Answer: MobileNetV2 consists of 154 layers in total. Setting fine_tune_at = 100 locks the first 100 layers (keeping their parameters frozen) while leaving the final 54 deep convolutional layers trainable. This allows us to keep the general, low-level feature extractors (like lines and textures) intact while adapting the higher-level feature maps to match the structures found in our new dataset.
+
+Assignment 6: Object Detection using Transfer Learning
+Your implementation: Load a pretrained EfficientDet-Lite0 detector → run inference on an image → draw detected bounding boxes.
+
+1. What is transfer learning?
+Transfer learning reuses knowledge learned on one task or dataset to help solve a related task.
+
+2. Why do we use transfer learning?
+It can reduce training time and data requirements by starting from useful pretrained features.
+
+3. What is a pretrained model?
+It is a model whose weights have already been learned from a dataset.
+
+4. Why can early CNN layers be reused?
+Early layers often learn general visual patterns such as edges and textures that are useful across different image tasks.
+
+5. What does freezing a layer mean?
+It means its weights are not updated during training.
+
+6. What is fine-tuning?
+Fine-tuning updates some or all pretrained weights using data from the new task, usually with a small learning rate.
+
+7. What is the difference between feature extraction and fine-tuning?
+Feature extraction keeps the pretrained base fixed while training a new task-specific head. Fine-tuning also updates selected pretrained layers.
+
+8. Why use a small learning rate during fine-tuning?
+It helps adapt the model without making large changes that could damage useful pretrained features.
+
+9. What is the difference between classification, detection and segmentation?
+Task	Output
+Classification	Image-level class label
+Object detection	Object classes and bounding boxes
+Segmentation	Pixel-level labels
+
+
+10. What is a bounding box?
+It is a rectangle specifying an object’s location in an image.
+
+11. What does an object detector typically output?
+Bounding boxes, class IDs, confidence scores and the number of detections.
+
+12. What is a confidence score?
+It indicates the model’s confidence in a detection. A higher score generally indicates a stronger prediction, but it is not necessarily a calibrated probability.
+
+13. Why is the confidence threshold set to 0.5?
+The code displays only detections scoring above 0.5. Raising the threshold usually removes more weak detections but may also miss real objects.
+
+14. What is EfficientDet-Lite0?
+It is a lightweight object detection model designed for efficient inference.
+
+15. What is the purpose of TensorFlow Hub?
+In this practical, it provides access to a reusable pretrained model.
+
+16. Why do we add a batch dimension?
+Models usually expect a batch of images. expand_dims(image, 0) changes (height, width, channels) into (1, height, width, channels).
+
+17. What are normalized bounding-box coordinates?
+They express locations relative to image dimensions, often between 0 and 1. Multiply x-coordinates by image width and y-coordinates by image height to obtain pixel coordinates.
+
+18. What is IoU?
+Intersection over Union measures overlap between predicted and ground-truth boxes:
+\[
+\operatorname{IoU}=\frac{\text{intersection area}}{\text{union area}}
+\]
+19. What is Non-Maximum Suppression?
+NMS removes highly overlapping duplicate detections, usually keeping the highest-scoring box.
+
+20. What is mAP?
+Mean Average Precision is a common object detection metric. It averages class-wise Average Precision under specified matching and IoU rules.
+
+21. Does the manual’s code actually fine-tune the detector?
+No. It loads a pretrained detector and performs inference. It does not train a new head or update pretrained weights.
+
+22. Can Oxford Pet labels directly name the detector’s output classes?
+No. Dataset labels and detector class IDs can follow different label systems. Predictions must use the detector’s own class mapping.
+
+23. Is image-level class information enough to train an object detector?
+Standard supervised object detection training requires bounding-box annotations and class labels. Image-level labels alone do not specify object locations.
+
+24. Can we normalize every pretrained model’s input by dividing by 255?
+No. Preprocessing must match the specific model’s expected input range, shape and data type.

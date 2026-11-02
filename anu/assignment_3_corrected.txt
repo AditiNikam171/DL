@@ -1,0 +1,231 @@
+# =====================================================================
+# ASSIGNMENT 3: CNN on CIFAR-10
+# Run in VS Code (Python Interactive / Jupyter extension) or Jupyter:
+# each '# %%' line starts a new cell. Needs: pip install tensorflow matplotlib numpy
+# =====================================================================
+
+# %% CNN on CIFAR-10
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPooling2D
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.utils import to_categorical
+
+# =====================================================================
+# STAGE A: Loading and Preprocessing the Image Data
+# =====================================================================
+print("--- Stage A: Loading and preparing the CIFAR-10 dataset ---")
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+# Normalize pixel values from range [0, 255] to range [0, 1]
+x_train, x_test = (
+    x_train.astype("float32") / 255.0,
+    x_test.astype("float32") / 255.0,
+)
+
+# One-hot encode the labels
+y_train = to_categorical(y_train, 10)
+y_test = to_categorical(y_test, 10)
+
+
+# =====================================================================
+# STAGE B: Defining the Model's Architecture
+# =====================================================================
+print("\n--- Stage B: Defining the CNN model architecture ---")
+model = Sequential(
+    [
+        Input(shape=(32, 32, 3)),
+        # Block 1: low-level features (edges)
+        Conv2D(32, (3, 3), activation="relu", padding="same"),
+        MaxPooling2D((2, 2)),
+        # Block 2: mid-level features (shapes)
+        Conv2D(64, (3, 3), activation="relu", padding="same"),
+        MaxPooling2D((2, 2)),
+        # Block 3: high-level features (textures)
+        Conv2D(128, (3, 3), activation="relu", padding="same"),
+        MaxPooling2D((2, 2)),
+        Flatten(),
+        Dense(128, activation="relu"),
+        Dense(10, activation="softmax"),
+    ]
+)
+
+model.summary()
+
+print("\nCompiling the model...")
+model.compile(
+    optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]
+)
+
+
+# =====================================================================
+# STAGE C: Training the Model
+# =====================================================================
+print("\n--- Stage C: Training the model ---")
+history = model.fit(
+    x_train, y_train, epochs=15, batch_size=64, validation_data=(x_test, y_test)
+)
+
+
+# =====================================================================
+# STAGE D: Estimating the Model's Performance
+# =====================================================================
+print("\n--- Stage D: Estimating the model's performance ---")
+test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
+print(f"\nFinal Test accuracy: {test_acc*100:.2f}%")
+
+print("\nMaking a prediction on a single test image...")
+class_names = [
+    "airplane", "automobile", "bird", "cat", "deer",
+    "dog", "frog", "horse", "ship", "truck",
+]
+
+# (32, 32, 3) -> (1, 32, 32, 3): a batch containing one image
+img = np.expand_dims(x_test[0], axis=0)
+prediction = model.predict(img)
+
+predicted_class = np.argmax(prediction)
+true_class = np.argmax(y_test[0])
+
+print(f"The model predicts the image is a '{class_names[predicted_class]}'.")
+print(f"The true class label is a '{class_names[true_class]}'.")
+
+
+# %% [NOTES] Explanation + Viva (kept inside a string so this file still runs top to bottom)
+NOTES = r"""
+#####explanation---
+
+
+
+1. Imports
+
+• import numpy as np
+Imports NumPy for processing arrays and matrix math, giving it the shortcut name np.
+• import tensorflow as tf
+Loads the core TensorFlow framework.
+• from tensorflow.keras.datasets import cifar10
+Imports the CIFAR-10 image dataset (60,000 photos across 10 categories).
+• from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPooling2D
+Imports the specific blocks required to build a CNN: Input, 2D Convolution layers, 2D Max Pooling layers, Flatten layers, and Dense layers.
+• from tensorflow.keras.models import Sequential
+Imports the blueprint model container that arranges layers linearly from first to last.
+• from tensorflow.keras.utils import to_categorical
+Imports a utility function to convert simple integer category labels into a binary matrix format.
+
+STAGE A: Loading and Preprocessing the Image Data
+
+• print("--- Stage A: Loading and preparing the CIFAR-10 dataset ---")
+Prints a header string to mark the data-loading step in your terminal window.
+• (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+Downloads and extracts the CIFAR-10 dataset into separate sets for training and testing images/labels.
+• x_train, x_test = (
+•     x_train.astype("float32") / 255.0,
+•     x_test.astype("float32") / 255.0,
+• )
+Converts image arrays into decimal points (float32) and normalizes pixel values from a 0–255 range down to a clean 0.0–1.0 scale. This keeps mathematical operations stable.
+• y_train = to_categorical(y_train, 10)
+Transforms training numbers into One-Hot Encoding (e.g., if the category label is 3, it becomes [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]).
+• y_test = to_categorical(y_test, 10)
+Applies the exact same one-hot binary conversion to the test data labels.
+
+STAGE B: Defining the Model's Architecture
+
+• print("\n--- Stage B: Defining the CNN model architecture ---")
+Prints a text message showing the structural design phase has begun.
+• model = Sequential([ ... ])
+Initializes a sequential model pipeline to stack layers together consecutively.
+• Input(shape=(32, 32, 3)),
+Declares that each sample is a 32x32 colour image with 3 channels (the modern Keras way; passing input_shape inside Conv2D gives a warning in Keras 3).
+• Conv2D(32, (3, 3), activation="relu", padding="same"),
+Creates 32 tiny scanning filters (sized 3x3 pixels) that glide across the 32x32x3 input image to extract low-level details like borders. padding="same" stops the image dimensions from shrinking.
+• MaxPooling2D((2, 2)),
+Downsamples the image by taking the maximum value in every 2x2 section. This cuts the width and height dimensions in half to speed up processing and prevent overfitting.
+• Conv2D(64, (3, 3), activation="relu", padding="same"),
+Applies 64 separate 3x3 filters to extract slightly more complex mid-level shapes from the downsampled features.
+• MaxPooling2D((2, 2)),
+Halves the dimensions of the feature maps once again.
+• Conv2D(128, (3, 3), activation="relu", padding="same"),
+Applies 128 separate 3x3 filters to map out intricate textures and high-level abstract combinations.
+• MaxPooling2D((2, 2)),
+Downsamples the final set of feature maps one last time.
+• Flatten(),
+Unrolls the final 3D block of spatial features into a single, long 1D list of values.
+• Dense(128, activation="relu"),
+Feeds the flattened array into a fully connected layer of 128 neurons to interpret the extracted features.
+• Dense(10, activation="softmax"),
+The final output layer with 10 neurons that distributes percentage confidence values across the 10 target classes.
+• model.summary()
+Prints out a summary chart mapping layer dimensions, connectivity flow, and the total number of weights/biases.
+• print("\nCompiling the model...")
+Outputs a preparation status message.
+• model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+Configures the system: binds the Adam optimizer, links categorical crossentropy loss (needed because the data is one-hot encoded), and tracks accuracy.
+
+STAGE C: Training the Model
+
+• print("\n--- Stage C: Training the model ---")
+Prints a message to show the learning pipeline execution phase has started.
+• history = model.fit(x_train, y_train, epochs=15, batch_size=64, validation_data=(x_test, y_test))
+Trains the model. It reads 64 images at a time (batch_size=64), cycles through the entire dataset 15 times (epochs=15), tests its own progress using x_test/y_test at the end of each round, and stores all accuracy history records inside the history variable.
+
+STAGE D: Estimating the Model's Performance
+
+• print("\n--- Stage D: Estimating the model's performance ---")
+Prints a header marking the start of the final diagnostic analysis stage.
+• test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
+Evaluates the completely trained system on the test data.
+• print(f"\nFinal Test accuracy: {test_acc*100:.2f}%")
+Formats and prints out the test accuracy as a clear percentage showing 2 decimal places.
+• print("\nMaking a prediction on a single test image...")
+Prints out a header showing individual classification logic verification is about to happen.
+• class_names = [ ... ]
+Defines an ordered mapping array translating raw index values (0 to 9) into human-readable text categories like "airplane" or "cat".
+• img = np.expand_dims(x_test[0], axis=0)
+Grabs the very first test image. Keras models expect a batch input, so np.expand_dims converts the image shape from (32, 32, 3) into a batch format of (1, 32, 32, 3).
+• prediction = model.predict(img)
+Feeds the modified single image batch forward into the network to generate the 10 output class probabilities.
+• predicted_class = np.argmax(prediction)
+Finds the index coordinate pointing to the maximum percentage probability value inside the model's prediction array.
+• true_class = np.argmax(y_test[0])
+Finds the index coordinate pointing to the number 1 within the true one-hot encoded answer key label.
+• print(f"The model predicts the image is a '{class_names[predicted_class]}'.")
+Converts the model's chosen numerical index into the matching text string name and prints it out.
+• print(f"The true class label is a '{class_names[true_class]}'.")
+Converts the real answer key numerical index into the matching text string name and prints it out to see if the model guessed correctly.
+
+
+#####Viva
+
+
+🧱 Core Architecture & Layers (Theory)
+
+• What are the four essential layers of a Convolutional Neural Network (CNN)?
+	• Answer: Convolution layer (extracts features using filters), ReLU layer (introduces non-linearity), Pooling layer (reduces spatial dimensions/down-samples), and Fully Connected layer (classifies the image based on final features).
+• What is the mathematical purpose of the Convolution layer?
+	• Answer: It performs an element-wise dot product between a moving filter matrix (kernel) and chunks of the input image matrix. This extracts structural feature maps like lines, borders, and gradients.
+• What does padding='same' mean in the Conv2D layer?
+	• Answer: It adds a border of zeros around the input image. This ensures that the output feature map retains the exact same spatial dimensions (width and height) as the input layer after the convolution math is applied.
+• What does MaxPooling2D((2, 2)) do, and why do we use it?
+	• Answer: It down-samples the feature map by selecting the maximum value from every 2 × 2 pixel block. This reduces spatial dimensions by half (lowering computational load) and makes the network invariant to minor distortions or shifts in the position of objects.
+• What is "Flattening" and why is it necessary before the dense layer?
+	• Answer: Flattening unrolls multidimensional 3D feature grids into a single long 1D linear array. It is mandatory because standard classification layers (Dense) cannot accept 3D matrices; they require a flat 1D vector input.
+
+⚙️ Preprocessing & Label Formatting (Code Specific)
+
+• What is One-Hot Encoding, and which function in your code handles it?
+	• Answer: One-hot encoding converts integer class indices into binary arrays containing a single 1 and rest 0s (e.g., class index 3 becomes [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]). In our code, to_categorical() from Keras handles this translation.
+• Why did we change the loss function to categorical_crossentropy in this assignment?
+	• Answer: Because our labels were modified into one-hot encoded matrices using to_categorical(). If we had left the target labels as raw integers (0–9), we would have used sparse_categorical_crossentropy instead.
+• Why do we need np.expand_dims(x_test[0], axis=0) before passing a single image to model.predict()?
+	• Answer: Keras models do not accept standalone single images; they expect data in batches structured as 4D tensors: (batch_size, width, height, channels). Expanding dimensions alters the shape from (32, 32, 3) to (1, 32, 32, 3), creating a dummy batch of size 1.
+
+🚀 Metrics & Code Evaluation
+
+• How does a CNN achieve "spatial invariance" as mentioned in your manual?
+	• Answer: Through the combination of convolution operations and pooling layers. Max-pooling extracts the strongest features regardless of where exactly they are located or slightly rotated within the image frame.
+• What trends indicate that your model is training correctly over the epochs?
+	• Answer: The training loss decreases while the training/validation accuracy increases across the runtime. This dual trend confirms the optimizer is successfully tuning the weights to reduce mistakes.
+• If your training accuracy reaches 95% but your test accuracy stays stuck at 60%, what is happening?
+	• Answer: The model is experiencing overfitting. It has memorized the specific details and noise of the training dataset instead of learning general patterns, causing it to perform poorly on unseen test data.
+"""

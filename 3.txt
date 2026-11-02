@@ -1,7 +1,13 @@
+import os
+
+# 1. Set the cache directory BEFORE importing TensorFlow/Keras.
+# For reliable offline use, replace with a fixed path, e.g. r"D:\ml_project"
+BASE_DIR = os.getcwd()
+os.environ["KERAS_HOME"] = os.path.join(BASE_DIR, "my_keras_cache")
+
 import numpy as np
-import tensorflow as tf
 from tensorflow.keras.datasets import cifar10
-from tensorflow.keras.layers import Conv2D, Dense, Flatten, MaxPooling2D
+from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPooling2D
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.utils import to_categorical
 
@@ -11,13 +17,11 @@ from tensorflow.keras.utils import to_categorical
 print("--- Stage A: Loading and preparing the CIFAR-10 dataset ---")
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
-# Normalize pixel values from range [0, 255] to range [0, 1] for stable gradients
-x_train, x_test = (
-    x_train.astype("float32") / 255.0,
-    x_test.astype("float32") / 255.0,
-)
+# Normalize pixel values from [0, 255] to [0, 1]
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
 
-# Convert integer class vectors to binary class matrices (One-Hot Encoding)
+# One-hot encode the labels
 y_train = to_categorical(y_train, 10)
 y_test = to_categorical(y_test, 10)
 
@@ -28,30 +32,25 @@ y_test = to_categorical(y_test, 10)
 print("\n--- Stage B: Defining the CNN model architecture ---")
 model = Sequential(
     [
-        # First Convolutional Block: Extracts low-level features like edges
-        Conv2D(
-            32, (3, 3), activation="relu", padding="same", input_shape=(32, 32, 3)
-        ),
+        Input(shape=(32, 32, 3)),
+        # Block 1: low-level features (edges)
+        Conv2D(32, (3, 3), activation="relu", padding="same"),
         MaxPooling2D((2, 2)),
-        # Second Convolutional Block: Extracts mid-level features like shapes
+        # Block 2: mid-level features (shapes)
         Conv2D(64, (3, 3), activation="relu", padding="same"),
         MaxPooling2D((2, 2)),
-        # Third Convolutional Block: Extracts high-level features like complex textures
+        # Block 3: high-level features (textures)
         Conv2D(128, (3, 3), activation="relu", padding="same"),
         MaxPooling2D((2, 2)),
-        # Flatten: Converts the 3D feature maps to a 1D vector for classification
+        # Classifier
         Flatten(),
-        # Fully Connected (Dense) Layers for final classification
         Dense(128, activation="relu"),
-        # Output layer with 10 neurons and softmax activation for probability distribution
         Dense(10, activation="softmax"),
     ]
 )
 
-# Print structural layout of the neural network
 model.summary()
 
-# Compile the model with Adam optimizer and Categorical Crossentropy Loss
 print("\nCompiling the model...")
 model.compile(
     optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]
@@ -62,7 +61,6 @@ model.compile(
 # STAGE C: Training the Model
 # =====================================================================
 print("\n--- Stage C: Training the model ---")
-# Training for 15 epochs with a batch size of 64
 history = model.fit(
     x_train, y_train, epochs=15, batch_size=64, validation_data=(x_test, y_test)
 )
@@ -72,36 +70,24 @@ history = model.fit(
 # STAGE D: Estimating the Model's Performance
 # =====================================================================
 print("\n--- Stage D: Estimating the model's performance ---")
-# Evaluate on unseen validation dataset
 test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
-print(f"\nFinal Test accuracy: {test_acc*100:.2f}%")
+print(f"\nFinal Test accuracy: {test_acc * 100:.2f}%")
 
-# Make a standalone prediction to test execution logic
 print("\nMaking a prediction on a single test image...")
 class_names = [
-    "airplane",
-    "automobile",
-    "bird",
-    "cat",
-    "deer",
-    "dog",
-    "frog",
-    "horse",
-    "ship",
-    "truck",
+    "airplane", "automobile", "bird", "cat", "deer",
+    "dog", "frog", "horse", "ship", "truck",
 ]
 
-# Expand dimensions from (32, 32, 3) to (1, 32, 32, 3) to represent a batch size of 1
+# (32, 32, 3) -> (1, 32, 32, 3) to make a batch of 1
 img = np.expand_dims(x_test[0], axis=0)
 prediction = model.predict(img)
 
-# Fetch index coordinates of the highest matching probability values
 predicted_class = np.argmax(prediction)
 true_class = np.argmax(y_test[0])
 
 print(f"The model predicts the image is a '{class_names[predicted_class]}'.")
 print(f"The true class label is a '{class_names[true_class]}'.")
-
 
 
 #####explanation---
@@ -240,3 +226,86 @@ Converts the real answer key numerical index into the matching text string name 
 	• Answer: The training loss decreases while the training/validation accuracy increases across the runtime. This dual trend confirms the optimizer is successfully tuning the weights to reduce mistakes.
 • If your training accuracy reaches 95% but your test accuracy stays stuck at 60%, what is happening?
 	• Answer: The model is experiencing overfitting. It has memorized the specific details and noise of the training dataset instead of learning general patterns, causing it to perform poorly on unseen test data.
+
+Assignment 3: Image Classification using CNN
+Your implementation: CIFAR-10 → three convolution and pooling blocks → Flatten → Dense → Softmax.
+
+1. What is a CNN?
+A Convolutional Neural Network is a neural network designed to learn spatial patterns in data such as images.
+
+2. Why is CNN suitable for images?
+It learns local patterns and shares filter weights across image locations, reducing parameters compared with fully connected processing of the same image.
+
+3. What is CIFAR-10?
+It contains 60,000 colour images of size 32 × 32 pixels, divided into 10 classes: 50,000 training images and 10,000 test images.
+
+4. What does input shape (32, 32, 3) mean?
+The image has height 32, width 32 and three colour channels: red, green and blue.
+
+5. What is convolution?
+A small filter slides across an image. At each position, it computes a weighted sum to produce a feature-map value.
+
+6. What is a filter or kernel?
+It is a small set of trainable weights that learns to respond to patterns such as edges, textures or shapes.
+
+7. What is a feature map?
+It is the output produced by applying a filter across an input.
+
+8. What does Conv2D(32, (3,3)) mean?
+It applies 32 learned filters, each with a spatial size of 3 × 3, producing 32 output feature maps.
+
+9. What is stride?
+Stride is the number of positions a filter moves at each step. A larger stride usually produces a smaller output.
+
+10. What is padding?
+Padding adds values around input boundaries. With stride 1, padding='same' preserves height and width; valid adds no padding.
+
+11. What is the convolution output-size formula?
+\[
+O=\left\lfloor\frac{N+2P-K}{S}\right\rfloor+1
+\]
+Here, \(N\) is input size, \(P\) is padding, \(K\) is kernel size and \(S\) is stride.
+
+12. What is pooling?
+Pooling summarizes local regions of a feature map to reduce spatial size and computation.
+
+13. What is the difference between max pooling and average pooling?
+Max pooling selects the largest value in a region. Average pooling calculates the mean value.
+
+14. Does max pooling learn filters?
+Standard max pooling has no trainable weights. Learned feature extraction mainly happens in convolutional layers.
+
+15. How do dimensions change in your CNN?
+Stage	Output shape, excluding batch
+Input	32 × 32 × 3
+Conv2D: 32 filters, same padding	32 × 32 × 32
+First 2 × 2 pooling	16 × 16 × 32
+Conv2D: 64 filters	16 × 16 × 64
+Second pooling	8 × 8 × 64
+Conv2D: 128 filters	8 × 8 × 128
+Third pooling	4 × 4 × 128
+Flatten	2,048
+Dense	128
+Output	10
+
+
+16. What is parameter sharing?
+The same filter weights are used at every spatial position. This reduces the number of parameters.
+
+17. What do early and deeper CNN layers learn?
+Early layers often learn edges and simple textures. Deeper layers combine these into more complex patterns and object parts.
+
+18. Why use one-hot encoding?
+It represents each class using a vector with one 1 and the remaining values 0. The manual’s CNN uses these labels with categorical cross-entropy.
+
+19. What is the difference between categorical and sparse categorical cross-entropy?
+Categorical cross-entropy expects one-hot labels. Sparse categorical cross-entropy expects integer class labels.
+
+20. What is data augmentation?
+It creates varied training examples using transformations such as flips, rotations or crops. This can improve generalization.
+
+21. What is dropout?
+Dropout randomly sets some activations to zero during training, reducing dependence on particular neurons and helping control overfitting.
+
+22. What is the difference between validation and test data?
+Validation data supports model selection and tuning. Test data should be reserved for final evaluation. The manual reuses test data for validation; a separate validation split is better practice.

@@ -54,64 +54,80 @@ print(f"True class: {true_class}")
 
 cifar-
 
+import os
+
+# 1. Set the cache directory BEFORE importing TensorFlow/Keras.
+# Uses the notebook's current folder. To fix it permanently, replace with e.g. r"D:\ml_project"
+BASE_DIR = os.getcwd()
+os.environ["KERAS_HOME"] = os.path.join(BASE_DIR, "my_keras_cache")
+
 import numpy as np
-import tensorflow as tf
 from tensorflow.keras.datasets import cifar10
-from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.layers import Dense, Flatten, Input
 from tensorflow.keras.models import Sequential
 
-# 1. Load and prepare the CIFAR-10 dataset
+# =====================================================================
+# STAGE A: Loading and Preprocessing the Image Data
+# =====================================================================
+print("--- Stage A: Loading and preparing the CIFAR-10 dataset ---")
+# Downloads once (needs internet the first time), then loads from
+# my_keras_cache/datasets/ on every later run.
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
-# Flatten the labels from shape (N, 1) to (N,) for proper loss evaluation
+# Flatten labels from shape (N, 1) to (N,)
 y_train, y_test = y_train.flatten(), y_test.flatten()
 
-# Normalize the pixel values to be between 0 and 1
-x_train, x_test = x_train / 255.0, x_test / 255.0
+# Normalize pixel values to 0-1 using float32
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
 
-# 2. Define the feedforward neural network model
+
+# =====================================================================
+# STAGE B: Defining the Feedforward Neural Network Model
+# =====================================================================
+print("\n--- Stage B: Defining the Multilayer Perceptron architecture ---")
 model = Sequential(
     [
-        # Flatten layer adjusted to transform a 32x32x3 color image into a 1D vector of 3072 pixels
-        Flatten(input_shape=(32, 32, 3)),
-        # A hidden layer with 128 neurons and ReLU activation
-        Dense(128, activation="relu"),
-        # The output layer with 10 neurons (for 10 classes) and Softmax activation for probabilities
-        Dense(10, activation="softmax"),
+        Input(shape=(32, 32, 3)),
+        Flatten(),                        # 32x32x3 -> 3072 values
+        Dense(128, activation="relu"),    # hidden layer
+        Dense(10, activation="softmax"),  # 10 classes
     ]
 )
 
-# 3. Compile the model
-# Using Adam optimizer, sparse_categorical_crossentropy loss for integer labels, and accuracy as a metric
-model.compile(
-    optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
-)
-
-# Print a summary of the model's architecture
 model.summary()
 
-# 4. Train the model on the training data for 5 epochs
-print("\nTraining the model on CIFAR-10...")
+print("\nCompiling the model...")
+model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"],
+)
+
+
+# =====================================================================
+# STAGE C: Training the Model
+# =====================================================================
+print("\n--- Stage C: Training the model on CIFAR-10 ---")
 model.fit(x_train, y_train, epochs=5)
 
-# 5. Evaluate the model on the test data
-print("\nEvaluating the model...")
-test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
-print(f"\nTest accuracy: {test_acc*100:.2f}%")
 
-# 6. Make predictions on the first few images of the test set
+# =====================================================================
+# STAGE D: Estimating the Model's Performance
+# =====================================================================
+print("\n--- Stage D: Evaluating the model ---")
+test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
+print(f"\nTest accuracy: {test_acc * 100:.2f}%")
+
+print("\nMaking predictions on the test set...")
 predictions = model.predict(x_test[:5])
 
-# Print the predicted class index and true class index for the first image
 predicted_class = np.argmax(predictions[0])
 true_class = y_test[0]
 
 print("\nPrediction for the first test image:")
 print(f"Predicted class index: {predicted_class}")
-print(f"True class index: {true_class}")
-
-
-
+print(f"True class index:      {true_class}")
 
 
 #####explanations--
@@ -305,3 +321,99 @@ Prints the true numeric category code, showing you whether the network's predict
 	• Answer: An epoch is one complete pass of the entire training dataset through the neural network. A batch is a small subset of the dataset (e.g., 32 samples) processed before updating the internal weights.
 • What is the Adam optimizer, and why is it preferred over standard SGD?
 	• Answer: Adam (Adaptive Moment Estimation) calculates adaptive learning rates for each parameter. It combines the advantages of RMSProp and Momentum, making it faster to converge and less sensitive to initial learning rate settings than standard Stochastic Gradient Descent (SGD).
+
+
+1. What is a feedforward neural network?
+It is a neural network in which information moves from the input through hidden layers to the output without recurrent loops.
+
+2. What are its main components?
+Input layer, hidden layers, output layer, weights, biases and activation functions.
+
+3. What does an artificial neuron do?
+It calculates a weighted sum of inputs, adds a bias and applies an activation function:
+\[
+y=f\left(\sum_i w_i x_i+b\right)
+\]
+4. What are weights and biases?
+Weights control the influence of inputs. Bias shifts the neuron’s activation. Both are learned during training.
+
+5. What is MNIST?
+MNIST is a dataset of handwritten digits from 0 to 9. It contains 60,000 training images and 10,000 test images, each measuring 28 × 28 pixels in grayscale.
+
+6. Why do we divide pixel values by 255?
+It scales pixel values from 0–255 to 0–1, helping make training more stable.
+
+7. Why do we use Flatten?
+Flatten converts each 28 × 28 image into a vector of 784 values so it can enter a Dense layer. It has no trainable parameters.
+
+8. What is a Dense layer?
+It is a fully connected layer in which each neuron connects to every output of the previous layer.
+
+9. Why do we need an activation function?
+It introduces nonlinearity so the network can learn complex relationships. Without nonlinear activations, stacked Dense layers behave like one linear transformation.
+
+10. What is ReLU?
+\[
+\operatorname{ReLU}(x)=\max(0,x)
+\]
+It returns zero for negative inputs and keeps positive inputs unchanged.
+
+11. Why does the output layer contain 10 neurons?
+MNIST has 10 possible classes: digits 0–9. Each output represents one class.
+
+12. Why do we use Softmax?
+Softmax converts output scores into class probabilities that sum to 1. The class with the highest probability is selected.
+
+13. What is a loss function?
+A loss function measures the difference between predictions and actual targets. Training tries to minimize this loss.
+
+14. Why use sparse categorical cross-entropy?
+It is suitable for multiclass classification when labels are integers such as 0, 1 and 2.
+
+15. What is backpropagation?
+Backpropagation calculates gradients of the loss with respect to weights using the chain rule. An optimizer then uses these gradients to update the weights.
+
+16. What is SGD?
+Stochastic Gradient Descent updates parameters using gradients calculated from individual examples or, commonly in practice, small batches.
+\[
+w_{\text{new}}=w_{\text{old}}-\eta\frac{\partial L}{\partial w}
+\]
+Here, \(\eta\) is the learning rate.
+
+17. What is the learning rate?
+It controls the size of weight updates. Too large a value can make training unstable; too small a value can make learning slow.
+
+18. What is the difference between SGD and Adam?
+SGD uses gradients with a chosen learning rate, optionally with momentum. Adam also maintains moving estimates of gradients and squared gradients to adapt updates for each parameter.
+
+19. What are an epoch, batch size and iteration?
+- Epoch: One complete pass through the training data.
+- Batch size: Number of examples processed before an update.
+- Iteration: One training step on a batch.
+20. What do compile(), fit(), evaluate() and predict() do?
+Method	Purpose
+compile()	Configures optimizer, loss and metrics
+fit()	Trains the model
+evaluate()	Calculates loss and metrics on supplied data
+predict()	Produces model outputs for supplied inputs
+
+
+21. What is overfitting?
+Overfitting happens when a model learns training-specific patterns and performs poorly on unseen data. Training loss may decrease while validation loss increases.
+
+22. How can we reduce overfitting?
+Use more representative data, dropout, L2 regularization, early stopping or a smaller model.
+
+23. What does np.argmax() do?
+It returns the index of the largest value. We use it to convert predicted probabilities into a class number.
+
+24. How many trainable parameters are in this model?
+A Dense layer has:
+\[
+(\text{inputs}\times\text{neurons})+\text{neurons}
+\]
+Therefore:
+- First Dense layer: \(784\times128+128=100,480\)
+- Output layer: \(128\times10+10=1,290\)
+- Total: 101,770
+Viva caution: If asked whether your manual’s code uses SGD, say: “The problem statement specifies SGD, but the sample code uses Adam. To follow the problem statement, I would compile the model with an SGD optimizer.”
