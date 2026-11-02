@@ -76,79 +76,101 @@ print(f"Total number of test samples: {len(test_data)}")
 ###explanation
 
 
-🧱 Core Architecture & Concept: What is an Autoencoder?
 
-An Autoencoder is a neural network designed to copy its input to its output. It consists of two main parts:
-1. Encoder: Compresses the input data (784 dimensions) down into a much smaller, low-dimensional bottleneck layer (32 dimensions) called the latent space.
-2. Decoder: Takes this compressed bottleneck representation and attempts to reconstruct the original input data back into its full dimension (784 inputs).
+1. Setup and Data Preparation
 
-STAGE 1: Setup and Data Preparation
+• import numpy as np
+Loads NumPy for array operations and processing math grids.
+• import tensorflow as tf
+Loads the core TensorFlow framework.
+• from tensorflow.keras.layers import Input, Dense
+Imports Input (to shape entry points) and Dense (fully connected layer blocks) from Keras.
+• from tensorflow.keras.models import Model
+Imports the Keras functional Model class, which allows for complex, branching layer pathways.
+• import matplotlib.pyplot as plt
+Loads the Matplotlib plotting tool for drawing charts and distributions.
+• (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+Downloads and splits the MNIST handwritten digits dataset into separate training and test variables.
+• x_train = x_train.astype('float32') / 255.
+• x_test = x_test.astype('float32') / 255.
+Converts image arrays to decimal format and scales pixel colors down to a stable 0.0–1.0 range.
+• x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+• x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+Flattens the 2D image grids into a long 1D list of 784 numbers (28 × 28). np.prod automatically calculates the multiplication of the width and height dimensions.
+• train_normal = x_train[y_train == 3]
+• test_normal = x_test[y_test == 3]
+Filters both sets to only keep images of the digit 3. The network will treat this single digit as its definition of "normal data."
 
-python
-x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
-x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
-train_normal = x_train[y_train == 3]
-test_normal = x_test[y_test == 3]
-Use code with caution.
-• Flattening with np.prod: Reshapes the 2D images (28, 28) into a single 1D vector of 784 pixels (28 * 28 = 784).
-• Filtering Normal Data: The array masking y_train == 3 filters the dataset so that the network only sees the digit '3' during training. The model learns the unique shapes, curves, and strokes that define a '3'.
+2. Building the Autoencoder Model
 
-STAGE 2: Building the Autoencoder Model
+• encoding_dim = 32
+Sets the target size of the bottleneck layer. The 784 pixels will be compressed down to just 32 values.
+• input_img = Input(shape=(784,))
+Creates the model entry layer, telling it to expect arrays containing 784 numbers.
+• encoded = Dense(128, activation='relu')(input_img)
+First step of the Encoder: shrinks the 784 numbers down to 128 using a relu activation.
+• encoded = Dense(64, activation='relu')(encoded)
+Second step of the Encoder: drops the data down further to 64 numbers.
+• encoded = Dense(encoding_dim, activation='relu')(encoded)
+Final step of the Encoder: squeezes the 64 numbers down into the 32-value bottleneck space (encoding_dim).
+• decoded = Dense(64, activation='relu')(encoded)
+First step of the Decoder: expands the compressed 32 numbers back out to 64.
+• decoded = Dense(128, activation='relu')(decoded)
+Second step of the Decoder: scales the data up to 128 numbers.
+• decoded = Dense(784, activation='sigmoid')(decoded)
+Final step of the Decoder: scales the data back to its original 784 size. It uses sigmoid to output values strictly between 0.0 and 1.0 (matching our normalized pixels).
+• autoencoder = Model(input_img, decoded)
+Assembles the structural pipeline by binding the starting input_img layer directly to the final decoded output layer.
+• autoencoder.compile(optimizer='adam', loss='mse')
+Configures the network training engine using the Adam optimizer and Mean Squared Error (MSE) loss, which measures pixel-by-pixel reconstruction accuracy.
+• autoencoder.summary()
+Prints out a chart illustrating layer paths, shape changes, and internal network parameters.
 
-This model uses the Keras Functional API (using Model(inputs, outputs)) instead of the Sequential format from earlier assignments.
-python
-input_img = Input(shape=(784,))
-encoded = Dense(128, activation='relu')(input_img)
-encoded = Dense(64, activation='relu')(encoded)
-encoded = Dense(encoding_dim, activation='relu')(encoded)  # Bottleneck layer (dim=32)
+3. Training the Autoencoder
 
-decoded = Dense(64, activation='relu')(encoded)
-decoded = Dense(128, activation='relu')(decoded)
-decoded = Dense(784, activation='sigmoid')(decoded)        # Reconstructed output
-Use code with caution.
-• The Compression Pipeline: The data flows through 784 -> 128 -> 64 -> 32 neurons. The encoding_dim = 32 layer forces the network to throw away noise and keep only the most important features of the digit '3'.
-• The Reconstruction Pipeline: The data expands back out through 32 -> 64 -> 128 -> 784 neurons.
-• activation='sigmoid': The final layer uses a sigmoid function to force the reconstructed output pixel values to fall strictly between 0.0 and 1.0, matching our normalized input images.
-• loss='mse': Compiled using Mean Squared Error. The network evaluates its performance by measuring the squared pixel-by-pixel difference between the input image and its own recreated output image.
+• print("Training the autoencoder...")
+Prints a message to the console window indicating that training is starting.
+• autoencoder.fit(train_normal, train_normal, epochs=50, batch_size=256, shuffle=True, validation_data=(test_normal, test_normal))
+Launches the training loop. Notice that both the input and the target are train_normal—the network is learning to copy its inputs. It updates its weights after looking at groups of 256 images, shuffles the data order, runs for 50 cycles (epochs), and checks its work against test_normal.
 
-STAGE 3: Training the Autoencoder
+4. Detect Anomalies and Visualize Results
 
-python
-autoencoder.fit(train_normal, train_normal, epochs=50, batch_size=256, ...)
-Use code with caution.
-• train_normal, train_normal: Notice that the input data and target labels are exactly the same! The model is not trying to predict a class label; it is learning to replicate itself.
-
-STAGE 4: Detecting Anomalies and Visualizing Results
-
-python
-test_data = np.concatenate([normal_test_data[:100], anomalous_test_data[:100]])
-reconstructions = autoencoder.predict(test_data)
-mse = np.mean(np.power(test_data - reconstructions, 2), axis=1)
-Use code with caution.
-• Creating the Mix: The code creates a test batch containing 100 normal images (digit '3') and 100 completely new, anomalous images (digit '7').
-• reconstructions: The model attempts to reconstruct all 200 images.
-• mse (Reconstruction Error): Measures the pixel mathematical difference.
-	• For the digit '3', the error will be very low because the model knows how to draw a '3'.
-	• For the digit '7', the error will be very high because the model has never seen a '7' and tries to reconstruct it using the rules it learned for a '3'.
-• Threshold Math:
-\(\text{Threshold}=\text{Mean\ of\ Normal\ Errors}+(2\times \text{Standard\ Deviation})\)
-Any image that produces a reconstruction error higher than this calculated boundary line is flagged as an anomaly.
-
-• Keras Functional API: Unlike previous assignments that used Sequential(), this model uses the Functional API (Input layer mapped directly into layer functions). This allows for complex, non-linear tensor routing.
-• Dimensionality Bottleneck: The structural node layout squashes the parameters down step-by-step: 784 → 128 → 64 → 32. The final layer of the encoder (encoding_dim = 32) is the latent space (bottleneck). It forces the network to strip away background noise and compress the 784 original features into just 32 critical mathematical descriptors
-• Symmetric Expansion: The decoder performs the mirror opposite of the encoder, scaling the parameters back out: 32 → 64 → 128 → 784. It takes the 32 numbers from the bottleneck layer and tries to reconstruct the original 784 pixels.
-• activation='sigmoid': The output layer uses a sigmoid activation function. Because sigmoid squashes numbers strictly between 0.0 and 1.0, it ensures that the autoencoder's newly generated pixels perfectly match the value boundaries of the normalized input dataset
-• loss='mse' (Mean Squared Error): The model measures its mistakes by taking the squared pixel-by-pixel difference between what was sent in and what the decoder built out.
-• Self-Targeting Structure: In the .fit() command, notice that train_normal is used as both the input and the target label. The autoencoder doesn't need external classifications (like "dog" or "cat"); it uses its own input data as the ground truth, making this an unsupervised framework.
-• The Stress Test Mix: The code sets up a test dataset containing 100 normal images (digit '3') and 100 anomalous images (digit '7'). A ground truth tracking array (test_labels) maps normal instances to 0 and anomalies to 1.
-• autoencoder.predict(): The completed model tries to run both groups through the encoder-decoder pipeline to reconstruct them
-• Evaluating Reconstruction Quality: mse tracks how badly the model drew the output.
-	• For Digit 3: The error is low because the weights are optimized to reconstruct the shapes and curves of a '3'.
-	• For Digit 7: The error is very high. The model tries to rebuild the straight lines of a '7' using the curved concepts it learned from the digit '3', leading to a messy reconstruction.
-• Statistical Outlier Boundary: The mathematical threshold is set using standard deviation:
-\(\text{Threshold}=\mu (\text{Mean\ Error\ of\ Normal\ Samples})+2\sigma (\text{Standard\ Deviation})\)
-Any image that produces a pixel error value crossing higher than this computed threshold line is immediately classified and flagged by the framework as an Anomaly.
-
+• normal_test_data = x_test[y_test == 3]
+Extracts test set images containing the digit 3 (normal data).
+• anomalous_test_data = x_test[y_test == 7]
+Extracts test set images containing the digit 7 (anomalous data).
+• test_data = np.concatenate([normal_test_data[:100], anomalous_test_data[:100]])
+Combines the first 100 normal images (3s) and the first 100 anomaly images (7s) into a single testing block of 200 images.
+• test_labels = np.array([0] * 100 + [1] * 100)
+Creates an answer key array containing 100 zeros (representing normal data) followed by 100 ones (representing anomalies).
+• reconstructions = autoencoder.predict(test_data)
+Passes the mixed 200 images through the trained autoencoder to see how well it can rebuild them.
+• mse = np.mean(np.power(test_data - reconstructions, 2), axis=1)
+Calculates the reconstruction error for each image. It finds the difference between the original pixels and the rebuilt pixels, squares them, and takes the average across the image columns (axis=1).
+• plt.figure(figsize=(10, 6))
+Creates a new visualization window that is 10 inches wide by 6 inches tall.
+• plt.hist(mse[test_labels == 0], bins=50, alpha=0.7, label='Normal (Digit 3)')
+Plots a histogram showing the distribution of reconstruction errors for the normal images (digit 3).
+• plt.hist(mse[test_labels == 1], bins=50, alpha=0.7, label='Anomaly (Digit 7)')
+Overlays a histogram showing the distribution of reconstruction errors for the anomaly images (digit 7).
+• plt.title('Reconstruction Error Distribution')
+Sets the main heading title for the chart window.
+• plt.xlabel('Reconstruction Error (MSE)')
+Labels the horizontal axis line to indicate the error scale.
+• plt.ylabel('Number of Samples')
+Labels the vertical axis line to count how many images fall into each error bin.
+• plt.legend()
+Draws a color-coded key index box on the chart to tell the two digit distributions apart.
+• plt.show()
+Renders the finalized graphical chart onto your computer screen.
+• threshold = np.mean(mse[test_labels == 0]) + 2 * np.std(mse[test_labels == 0])
+Calculates a mathematical cutoff boundary line. It takes the average error of the normal data and adds two standard deviations to it. Anything with an error higher than this threshold will be flagged as an anomaly.
+• print(f"\nThreshold for anomaly detection: {threshold:.4f}")
+Prints the final calculated mathematical boundary point out to 4 decimal places.
+• print(f"Number of anomalies detected (error > threshold): {np.sum(mse > threshold)}")
+Counts how many test images had a higher reconstruction error than our cutoff line and prints out the result.
+• print(f"Total number of test samples: {len(test_data)}")
+Prints out the total number of mixed testing files evaluated (which will be 200).
 
 ########Viva 
 

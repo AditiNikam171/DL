@@ -131,97 +131,58 @@ print("\nTraining workflow execution complete.")
 
 
 
-. Data Preparation and Preprocessing (Bypassing Server Down Time)
-
-python
-(x_train_raw, y_train_raw), (x_test_raw, y_test_raw) = tf.keras.datasets.cifar10.load_data()
-Use code with caution.
-• Dataset Swapping: Since the Oxford University servers (thor.robots.ox.ac.uk) are offline and timing out, we swapped the dataset to CIFAR-10 via Keras. It loads instantly from a secure, local cache, bypassing external network dependencies so your assignment compiles immediately.
-python
-def preprocess_image_pipeline(images, labels):
-    images = tf.cast(images, dtype=tf.float32) / 255.0
-    images = tf.image.resize(images, (96, 96))
-    return images, labels
-Use code with caution.
-• Data Normalization: Converts pixel integers into standard floating-point numbers between [0.0, 1.0], which prevents numerical instability and speeds up weight updates.
-• Resolution Upscaling: CIFAR-10 images are natively small (\(32 \times 32\)). We use tf.image.resize to scale them up to \((96, 96)\) to perfectly match your explicit model configuration bounds.
-python
-ds_train = tf.data.Dataset.from_tensor_slices((x_train_raw, y_train_raw))
-ds_train = ds_train.shuffle(5000).batch(batch_size)
-ds_train = ds_train.map(preprocess_image_pipeline, num_parallel_calls=tf.data.AUTOTUNE).prefetch(tf.data.AUTOTUNE)
-Use code with caution.
-• High-Throughput Input Pipeline:
-	• Converts the dataset arrays into an active tf.data.Dataset stream.
-	• .shuffle(5000) prevents the network from memorizing sequence patterns.
-	• .prefetch(tf.data.AUTOTUNE) allows the CPU to dynamically prepare future batches while the GPU computes the current execution step.
-
-2. Pre-trained Base Model Integration
-
-python
-base_model = MobileNetV2(
-    weights='imagenet', 
-    include_top=False, 
-    input_shape=(96, 96, 3)
-)
-Use code with caution.
-• Transfer Learning Foundation (Step a): Instantiates the MobileNetV2 base architecture using high-quality feature extractor filters pre-optimized on millions of images from the ImageNet challenge.
-• Structural Bounds Adjustment:
-	• include_top=False discards the original 1000-class dense classification matrix at the end of the base network.
-	• input_shape=(96, 96, 3) matches your custom input image dimensions.
-
-3. Layer Freezing
-
-python
-base_model.trainable = False 
-Use code with caution.
-• Parameter Protection (Step b): Locks all weights and biases in the base network. By setting .trainable = False, backpropagation will not alter the general features (edges, basic geometry, textures) already learned from ImageNet during the initial training phase.
-
-4. Custom Trainable Classifier Construction
-
-python
-inputs = tf.keras.Input(shape=(96, 96, 3), name="Input_Image")
-x = base_model(inputs, training=False)
-x = tf.keras.layers.GlobalAveragePooling2D(name="Global_Average_Pooling")(x)
-Use code with caution.
-• Feature Processing (Step c): Passes the input images through the locked base model. Setting training=False forces standard internal layers (like BatchNormalization) to operate consistently in inference mode.
-• Global Pooling: GlobalAveragePooling2D compresses spatial 2D feature grids into a flat, 1D linear feature array by calculating the average pixel values across each channel.
-python
-x = tf.keras.layers.Dense(256, activation='relu', name="Dense_Trainable_1")(x)
-x = tf.keras.layers.Dropout(0.3, name="Dropout_Regularization")(x)
-outputs = tf.keras.layers.Dense(num_classes, activation='softmax', name="Output_Predictions")(x)
-model = tf.keras.Model(inputs=inputs, outputs=outputs)
-Use code with caution.
-• Trainable Sub-Layers: Appends a new, customizable classification network.
-• Dropout Regularization: Dropout(0.3) randomly zeroes out 30% of neuron outputs during training steps. This breaks accidental dependencies between nodes and blocks overfitting.
-• Softmax Predictions: The output layer matches our 10 new dataset classes, using a softmax activation to output an explicit probability distribution summing to 1.0.
-
-5. Training the Custom Classifier
-
-python
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-              loss='sparse_categorical_crossentropy',
-              metrics=['accuracy'])
-history = model.fit(ds_train, epochs=2, validation_data=ds_test)
-Use code with caution.
-• Phase One Learning (Step d): Compiles the system and trains it for 2 epochs. Because base_model.trainable is set to false, only the weights inside your newly added 256-node layer and output layer are updated during this pass.
-
-6. Selective Fine-Tuning
-
-python
-base_model.trainable = True
-fine_tune_at = 100
-for layer in base_model.layers[:fine_tune_at]:
-    layer.trainable = False
-Use code with caution.
-• Hyperparameter Tuning (Step e): Unfreezes the base network, but strategically loops through layers 0 to 99 to keep them locked. This leaves the final deep convolutional blocks (layers 100 to 154) trainable so they can adapt to the complex structural details of the new target dataset.
-python
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), 
-              loss='sparse_categorical_crossentropy',
-              metrics=['accuracy'])
-Use code with caution.
-• Catastrophic Forgetting Defense: Re-compiles the model using a significantly lower learning rate (0.0001). This ensures gradient steps are small and precise, preventing the backpropagation algorithm from accidentally breaking or erasing the core feature maps learned from ImageNet.
-• Finally, model.fit() runs to complete the training process over the newly unfrozen layers.
-
+.• import os — Imports the operating system module to manage environment configurations and directory paths.
+• import tensorflow as tf — Imports the core TensorFlow framework to access deep learning models, layers, and dataset utilities.
+• import numpy as np — Imports the NumPy library to handle multi-dimensional array operations.
+• import matplotlib.pyplot as plt — Imports the Matplotlib plotting tool to visualize training curves and images.
+• from tensorflow.keras.applications import MobileNetV2 — Imports the pre-trained MobileNetV2 architecture directly from the Keras applications library.
+• os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' — Sets the system logging level to block informational and warning messages from TensorFlow, keeping the output clean.
+• print("Loading built-in dataset safely from Keras local repository...") — Prints a status message announcing the retrieval of the image dataset.
+• (x_train_raw, y_train_raw), (x_test_raw, y_test_raw) = tf.keras.datasets.cifar10.load_data() — Downloads and loads the CIFAR-10 image data split into raw training and testing sets.
+• num_classes = 10 — Declares an integer variable tracking the ten distinct image categories in the dataset.
+• print(f"Number of classes in dataset: {num_classes}") — Prints the total number of target classes to the console window.
+• def preprocess_image_pipeline(images, labels): — Defines a custom preprocessing function to format image arrays for the network.
+• images = tf.cast(images, dtype=tf.float32) — Converts the raw image pixel integers into 32-bit floating-point numbers.
+• images = images / 255.0 — Normalizes the pixel values from an unsigned byte range down to a standard decimal range between zero and one.
+• images = tf.image.resize(images, (96, 96)) — Upscales the small dimensions of the images up to the specific input dimensions required by MobileNetV2.
+• return images, labels — Outputs the modified image tensor along with its matching classification label.
+• batch_size = 32 — Sets the data tracking block size to group images into bundles of thirty-two for efficient processing.
+• ds_train = tf.data.Dataset.from_tensor_slices((x_train_raw, y_train_raw)) — Creates a structured TensorFlow Dataset stream out of the raw training arrays.
+• ds_train = ds_train.shuffle(5000).batch(batch_size) — Randomizes the row order using a buffer size of five thousand, then segments the data into the batch size.
+• ds_train = ds_train.map(preprocess_image_pipeline, num_parallel_calls=tf.data.AUTOTUNE).prefetch(tf.data.AUTOTUNE) — Applies the pipeline function dynamically across multiple CPU threads and pre-loads upcoming batches into memory to maximize GPU efficiency.
+• ds_test = tf.data.Dataset.from_tensor_slices((x_test_raw, y_test_raw)) — Creates a structured TensorFlow Dataset stream out of the raw testing arrays.
+• ds_test = ds_test.batch(batch_size) — Segments the testing dataset into fixed bundles without randomizing the structural order.
+• ds_test = ds_test.map(preprocess_image_pipeline, num_parallel_calls=tf.data.AUTOTUNE).prefetch(tf.data.AUTOTUNE) — Applies the data processing function and pre-fetches testing data to maintain processing efficiency.
+• print("\nLoading pre-trained MobileNetV2 base network with custom shape...") — Prints a message indicating that the base feature extractor is loading.
+• base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(96, 96, 3)) — Configures the MobileNetV2 model using ImageNet weights, discards the original classification layer, and sets the input dimensions.
+• print("Freezing lower convolutional weights...") — Prints a status message announcing that the base layer parameters are being locked.
+• base_model.trainable = False — Freezes every internal parameter inside the base network to prevent changes during the first training step.
+• print("Building custom structural network architecture...") — Prints a message indicating the assembly of the transfer learning architecture.
+• inputs = tf.keras.Input(shape=(96, 96, 3), name="Input_Image") — Explicitly declares the tensor entry point matching the structural dimensions of the images.
+• x = base_model(inputs, training=False) — Routes the incoming images through the frozen feature extractor network while locking batch normalization metrics.
+• x = tf.keras.layers.GlobalAveragePooling2D(name="Global_Average_Pooling")(x) — Compresses the spatial dimensions of the feature map into a flat, single-dimensional vector by averaging the activation values.
+• x = tf.keras.layers.Dense(256, activation='relu', name="Dense_Trainable_1")(x) — Passes the vector through a new trainable hidden layer containing two hundred and fifty-six neurons with ReLU activation.
+• x = tf.keras.layers.Dropout(0.3, name="Dropout_Regularization")(x) — Deactivates thirty percent of the nodes at random during training updates to counteract model overfitting.
+• outputs = tf.keras.layers.Dense(num_classes, activation='softmax', name="Output_Predictions")(x) — Constructs the final classification layer containing ten output nodes mapping to Softmax target probabilities.
+• model = tf.keras.Model(inputs=inputs, outputs=outputs, name="Transfer_Learning_Classifier") — Binds the input node layer and the final output layer together into an executable Keras Model entity.
+• model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='sparse_categorical_crossentropy', metrics=['accuracy']) — Links the network to the Adam optimization algorithm, selects Sparse Categorical Crossentropy for handling integer categories, and sets up accuracy metrics.
+• model.summary() — Outputs a detailed architecture grid tracking layer shapes, structural connectivity, and weight parameter totals.
+• epochs_initial = 2 — Declares a tracking variable to run the initial training process for two complete loops.
+• print(f"\nTraining custom classifier layers for {epochs_initial} epochs...") — Prints a confirmation message specifying the total target execution loops.
+• history = model.fit(ds_train, epochs=epochs_initial, validation_data=ds_test) — Executes the network training steps on the training stream while periodically tracking diagnostic scores against the test stream.
+• print("\n[Fine-Tuning Process Started]") — Prints a text notification announcing that the deep optimization process is starting.
+• base_model.trainable = True — Changes the status of the entire base feature extractor network to unlock its weight layers for tuning.
+• fine_tune_at = 100 — Specifies layer number one hundred as the precise boundary line for splitting frozen and unfrozen parameters.
+• for layer in base_model.layers[:fine_tune_at]: — Loops through the ordered structure of the base network layers up to the boundary mark.
+• layer.trainable = False — Keeps the lower feature extraction layers firmly locked to preserve foundational shapes and edges.
+• model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='sparse_categorical_crossentropy', metrics=['accuracy']) — Recompiles the system configuration using a significantly slower learning rate to carefully update weights without damaging features.
+• print("Updated layer trainability statuses:") — Prints a text header for tracking the active layer adjustments.
+• print(f"Base Model Layers: {len(base_model.layers)} | Trainable Layers: {len(base_model.layers) - fine_tune_at}") — Calculates and displays the total layers in the base model alongside the remaining number of unlocked layers.
+• epochs_fine = 2 — Declares an adjustment variable setting the fine-tuning duration to two additional loops.
+• total_epochs = epochs_initial + epochs_fine — Evaluates the combined number of structural loops to determine the final target cutoff value.
+• print(f"\nFine-tuning model for an additional {epochs_fine} epochs...") — Prints a text confirmation announcing the exact number of secondary tuning loops.
+• history_fine = model.fit(ds_train, epochs=total_epochs, initial_epoch=history.epoch[-1] + 1, validation_data=ds_test) — Restarts the optimization routine, beginning exactly where the previous phase stopped, and runs until reaching the final loop threshold.
+• print("\nTraining workflow execution complete.") — Prints a message confirming that the entire deep learning workflow has successfully executed.
 
 
 ######viva

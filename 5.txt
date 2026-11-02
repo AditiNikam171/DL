@@ -103,25 +103,52 @@ for word, idx in list(word_index.items())[:10]:  # Show first 10 words
 
 This code implements a Continuous Bag of Words (CBOW) model, which is a core Natural Language Processing (NLP) architecture designed to learn dense geometric vector representations of words (Word Embeddings).
 
-Paragraph 1: Text Tokenization and Numerical Sequencing
+• import numpy as np — Imports the NumPy library under the alias np to manipulate multi-dimensional arrays and matrix operations.
+• import tensorflow as tf — Imports the core TensorFlow framework to handle the deep learning computations.
+• from tensorflow.keras.layers import Dense, Embedding, GlobalAveragePooling1D, Input — Pulls the Dense, Embedding, GlobalAveragePooling1D, and Input layers from Keras to build the network structure.
+• from tensorflow.keras.models import Model — Pulls the functional Model class from Keras to stitch custom input and output layers together.
+• from tensorflow.keras.preprocessing.sequence import pad_sequences — Imports pad_sequences to fill shorter context rows with trailing zeros so they all match in length.
+• from tensorflow.keras.preprocessing.text import Tokenizer — Imports the Tokenizer utility to convert raw text strings into structured collections of integer numbers.
+• from tensorflow.keras.utils import to_categorical — Imports to_categorical to convert single integer target labels into binary one-hot matrix distributions.
+• corpus = [ ... ] — Sets up a Python list containing five sample sentences to serve as the training text corpus.
+• tokenizer = Tokenizer() — Instantiates a blank Tokenizer object to handle text processing.
+• tokenizer.fit_on_texts(corpus) — Commands the tokenizer to analyze the corpus vocabulary and map words to unique numbers based on frequency.
+• word_index = tokenizer.word_index — Extracts the internal dictionary that maps each literal text word to its assigned integer index.
+• vocab_size = len(word_index) + 1 — Calculates total vocabulary size by taking the dictionary length and adding one to account for the zero padding index.
+• print(f"Vocabulary Size: {vocab_size}") — Prints the final vocabulary size value to the console window.
+• sequences = tokenizer.texts_to_sequences(corpus) — Transforms the raw text sentences of the corpus into sequences of corresponding integer numbers.
+• window_size = 2 — Defines a sliding context window size of two words to the left and two words to the right.
+• data = [] — Creates an empty list to store the extracted context-target data pairs.
+• for sequence in sequences: — Opens a loop to iterate through each integer-encoded sentence array one by one.
+• for i, word in enumerate(sequence): — Opens a nested loop to step through every word index and integer token inside the active sentence.
+• context = [] — Creates a temporary empty list to collect the surrounding neighbor words for the active word.
+• for j in range(i - window_size, i + window_size + 1): — Loops through the relative index window spanning from two positions behind to two positions ahead.
+• if j != i and 0 <= j < len(sequence): — Evaluates if the current loop index avoids the center word itself and stays within valid sentence array bounds.
+• context.append(sequence[j]) — Adds the valid neighboring context word integer into the temporary tracking list.
+• if context: — Verifies if the temporary context list contains at least one neighbor token before proceeding.
+• data.append((context, word)) — Appends the combined context word list and the single center target word into the main data array.
+• X_context = [item[0] for item in data] — Groups all the context integer arrays together into an independent feature list using a list comprehension.
+• y_target = np.array([item[1] for item in data]) — Groups all the isolated target words together and locks them into a standard NumPy array format.
+• max_len = max(len(x) for x in X_context) — Measures the length of the longest context list present in the dataset to define the standard input length.
+• X_context_padded = pad_sequences(X_context, maxlen=max_len, padding="post") — Fills shorter rows with trailing zeros until every row perfectly matches the maximum length dimension.
+• y_target_one_hot = to_categorical(y_target, num_classes=vocab_size) — Converts the flat integer target array into a two-dimensional one-hot encoded probability matrix.
+• embedding_dim = 100 — Sets the output dimension size of the dense continuous word vectors to one hundred dimensions.
+• input_context = Input(shape=(max_len,), name="Context_Input") — Declares the network input entry point, shaped to accept rows matching the maximum context length.
+• embedding_layer = Embedding(input_dim=vocab_size, output_dim=embedding_dim, name="Word_Embeddings")(input_context) — Sets up an Embedding layer lookup table that converts incoming integers into dense floating-point vector tracks.
+• avg_context = GlobalAveragePooling1D(name="Average_Context")(embedding_layer) — Adds a GlobalAveragePooling1D layer to calculate the mean vector of all context tokens inside the window.
+• output_layer = Dense(vocab_size, activation="softmax", name="Target_Prediction")(avg_context) — Configures a Dense output classification layer using a Softmax activation function to predict the vocabulary words.
+• cbow_model = Model(inputs=input_context, outputs=output_layer) — Unifies the designated context input and target output configurations into a single functional Keras Model.
+• cbow_model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]) — Compiles the network model using the Adam optimization engine and the Categorical Crossentropy loss formula.
+• cbow_model.summary() — Outputs a visual structural summary table of layer shapes, execution paths, and parameters.
+• print("\nTraining the CBOW model...") — Prints a text message announcing that the model training loops are starting.
+• cbow_model.fit(X_context_padded, y_target_one_hot, epochs=500, verbose=0) — Fits the model to the context matrix and target labels across five hundred loops while silencing progress printouts.
+• print("Training complete.") — Prints a text confirmation indicating that the model training process is fully complete.
+• embedding_matrix = cbow_model.get_layer("Word_Embeddings").get_weights()[0] — Reaches directly into the trained model structure to extract the raw calculated matrix weights of the Embedding layer.
+• print("\nLearned Word Embeddings (First 5 Dimensions shown):") — Prints a decorative text separator to introduce the upcoming word vector outputs.
+• for word, idx in list(word_index.items())[:10]: — Opens a loop to look through the first ten text items stored inside the token dictionary.
+• if idx < vocab_size: — Implements a safety check ensuring the word's internal tracking index fits within the vocabulary limit.
+• print(f"Word: '{word:<10}' Vector: {embedding_matrix[idx][:5]}") — Prints the text word neatly alongside the first five numerical coordinate scores of its learned vector.
 
-The pipeline starts by creating a text corpus and mapping sentences into raw numeric tokens. The Tokenizer() indexes text vocabulary by tracking word counts. vocab_size = len(word_index) + 1 handles the total unique words plus an extra index allocated for zero padding placeholders (post-padding). Using texts_to_sequences(), raw character strings are transformed into list arrays containing unique dictionary integer indices.
-
-Paragraph 2: Sliding Context Window Matrix Generation
-
-The code iterates through the token lists to build training context spaces using a sliding window algorithm (window_size = 2). For every central target word array, the program scans up to two places backward (left) and two places forward (right), appending adjacent text indices into X_context while keeping the true word target inside y_target. Because sentences at edges have fewer neighbors, pad_sequences(..., padding='post') adds trailing zeros to force input features into a perfectly uniform mathematical grid layout (max_len). Target features undergo a one-hot categorical matrix mapping using to_categorical() to prepare for network routing.
-
-Paragraph 3: Embedding Map Projection and Feature Averaging (The Lambda Layer)
-
-The structural network pipeline utilizes the Keras Functional API. The Embedding layer functions as a giant lookup reference table that maps every sparse individual word integer token into a continuous, dense numerical vector coordinates array (embedding_dim = 100). The core property of a CBOW network is that it ignores the specific ordering of neighboring words. To capture this property, a Keras Lambda layer executes a mathematical reduction operation (K.mean(x, axis=1)), taking the vectors of all context words inside the window matrix and averaging them into a single summary vector of dimension 100.
-
-Paragraph 4: Dense Softmax Prediction and Target Matrix Cross-Entropy Loss
-
-The averaged feature representation array passes directly into a terminal Dense classification layer containing nodes equal to vocab_size. Driven by a softmax activation routine, the network normalizes raw logit calculations into absolute percentage estimates that predict which vocabulary token best fits the provided context gap. The system maps errors via a categorical_crossentropy loss engine, optimization updates are driven by adam, and the network undergoes a training run for 500 epochs to adjust the values inside the embedding weight matrices.
-
-Paragraph 5: Extracting the Learned Word Weights
-
-Once training stops, the internal weights of the layer explicitly named "Word_Embeddings" are extracted using .get_weights()[0]. These weights are the final word embeddings. Words that frequently share identical contexts (like "fox" and "dog") will end up with highly similar mathematical parameters in this coordinate system, converting abstract human text into spatial geometric relationships.
 
 
 
