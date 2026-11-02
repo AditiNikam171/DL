@@ -1,0 +1,172 @@
+mnist--
+
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.datasets import mnist
+import numpy as np
+
+# Load and prepare the MNIST dataset
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+
+
+# Normalize the pixel values to be between 0 and 1
+x_train, x_test = x_train / 255.0, x_test / 255.0
+
+# Define the feedforward neural network model
+model = Sequential([
+# Flatten layer to transform the 28x28 image into a 1D vector of 784 pixels
+Flatten(input_shape=(28, 28)),
+# A hidden layer with 128 neurons and ReLU activation
+Dense(128, activation='relu'),
+# The output layer with 10 neurons (for digits 0-9) and Softmax activation for probabilities
+Dense(10, activation='softmax')
+])
+
+
+# Compile the model
+# Using Adam optimizer, sparse_categorical_crossentropy loss for integer labels, and accuracy as a metric
+model.compile(optimizer='adam',
+loss='sparse_categorical_crossentropy',
+metrics=['accuracy'])
+
+# Print a summary of the model's architecture
+model.summary()
+
+# Train the model on the training data for 5 epochs
+print("\nTraining the model...")
+model.fit(x_train, y_train, epochs=5)
+
+# Evaluate the model on the test data
+print("\nEvaluating the model...")
+test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
+print(f'\nTest accuracy: {test_acc*100:.2f}%')
+# Make predictions on the first few images of the test set
+predictions = model.predict(x_test[:5])
+# Print the predicted class and true class for the first image
+predicted_class = np.argmax(predictions[0])
+true_class = y_test[0]
+print("\nPrediction for the first test image:")
+print(f"Predicted class: {predicted_class}")
+print(f"True class: {true_class}")
+
+
+cifar-
+
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.models import Sequential
+
+# 1. Load and prepare the CIFAR-10 dataset
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+# Flatten the labels from shape (N, 1) to (N,) for proper loss evaluation
+y_train, y_test = y_train.flatten(), y_test.flatten()
+
+# Normalize the pixel values to be between 0 and 1
+x_train, x_test = x_train / 255.0, x_test / 255.0
+
+# 2. Define the feedforward neural network model
+model = Sequential(
+    [
+        # Flatten layer adjusted to transform a 32x32x3 color image into a 1D vector of 3072 pixels
+        Flatten(input_shape=(32, 32, 3)),
+        # A hidden layer with 128 neurons and ReLU activation
+        Dense(128, activation="relu"),
+        # The output layer with 10 neurons (for 10 classes) and Softmax activation for probabilities
+        Dense(10, activation="softmax"),
+    ]
+)
+
+# 3. Compile the model
+# Using Adam optimizer, sparse_categorical_crossentropy loss for integer labels, and accuracy as a metric
+model.compile(
+    optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+)
+
+# Print a summary of the model's architecture
+model.summary()
+
+# 4. Train the model on the training data for 5 epochs
+print("\nTraining the model on CIFAR-10...")
+model.fit(x_train, y_train, epochs=5)
+
+# 5. Evaluate the model on the test data
+print("\nEvaluating the model...")
+test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
+print(f"\nTest accuracy: {test_acc*100:.2f}%")
+
+# 6. Make predictions on the first few images of the test set
+predictions = model.predict(x_test[:5])
+
+# Print the predicted class index and true class index for the first image
+predicted_class = np.argmax(predictions[0])
+true_class = y_test[0]
+
+print("\nPrediction for the first test image:")
+print(f"Predicted class index: {predicted_class}")
+print(f"True class index: {true_class}")
+
+
+
+
+
+#####explanations--
+
+cifar-
+
+• cifar10.load_data(): Downloads 60,000 images divided into 10 distinct real-world classes (e.g., airplanes, automobiles, birds, cats, deer, dogs, frogs, horses, ships, trucks).
+• y_train.flatten(): The CIFAR-10 loader stores target labels inside a 2D column grid structure (50000, 1). We apply .flatten() to clean it into a single-dimensional vector (50000,). Without this step, TensorFlow might raise shape mismatch warnings during training.
+• / 255.0: Normalises pixel channel arrays from their raw configuration ranges [0, 255] into float scaling steps between [0.0, 1.0].
+• Flatten: Re-arranges the internal structural grid. Unlike MNIST (28 × 28 × 1 = 784 values), a CIFAR-10 image is built out of 3 color channels (Red, Green, Blue).
+• The Math: The unrolling operation multiplies the dimensions (32 pixels wide × 32 pixels high × 3 color planes), creating a single long linear vector containing 3,072 input parameters per image.
+python
+• Dense(128): A hidden mathematical layer where 128 distinct artificial neurons are fully connected to all 3,072 inputs.
+• activation='relu': Passes the output through the Rectified Linear Unit filter, changing any negative calculation values to zero to add non-linearity to the network.
+• Dense(10): The final decision layer containing exactly 10 nodes (one for each item class).
+• activation='softmax': Normalises the final matrix scores into a probability distribution totaling 1.0 (100%). The node with the highest probability value is chosen as the final prediction.
+• optimizer='adam': An adaptive learning algorithm that dynamically changes learning rates to update network weights quickly and efficiently.
+• loss='sparse_categorical_crossentropy': Used because the labels are integers (0 to 9) rather than one-hot encoded vectors. It measures how close the predicted probability distribution is to the actual target digit.
+• model.summary(): Displays a table detailing the interior dimensions and total trainable parameters across every layer block.
+• model.fit(): Executes the optimization loop. It loops through the entire dataset 5 times (epochs), tweaking internal weights to minimize the calculated training error.
+• model.evaluate(): Runs the trained model on 10,000 new test images it has never seen before to gauge its actual real-world validation accuracy.
+• model.predict(): Returns the 10 softmax probability percentages for the images.
+• np.argmax(predictions[0]): Scans through the list of 10 output scores, finds the position containing the highest value, and yields that class index as the final prediction.
+
+
+######Viva
+
+• What are the structural differences between the MNIST and CIFAR-10 datasets?
+	• Answer: MNIST contains \(28\times28\) grayscale images (1 channel) representing handwritten digits (0–9). CIFAR-10 contains \(32\times32\) color images (3 RGB channels) representing real-world objects (like airplanes, cats, and cars).
+• Why did the input dimension of the Flatten layer change from 784 to 3072?
+	• Answer: MNIST has \(28 \times 28 \times 1 = 784\) pixels. CIFAR-10 has three color channels, so flattening it results in \(32 \times 32 \times 3 = 3072\) input values.
+• What is the purpose of y_train.flatten() in the CIFAR-10 code, and why wasn't it explicitly needed for MNIST?
+	• Answer: The Keras CIFAR-10 dataset loader imports labels as a 2D column vector with the shape (50000, 1). We flatten it to a 1D vector (50000,) so it matches the format expected by the sparse_categorical_crossentropy loss function. MNIST labels are already 1D by default.
+
+🏗️ Network Architecture & Design
+
+• Why do both models have exactly 10 neurons in their final dense layer?
+	• Answer: The final layer represents the number of target classes. Both MNIST (digits 0–9) and CIFAR-10 (10 distinct object categories) have exactly 10 output classes.
+• What is the difference between the hidden layer and the output layer activations in these codes?
+	• Answer: The hidden layer uses ReLU to introduce non-linearity and prevent vanishing gradients. The output layer uses Softmax to convert the raw numerical outputs (logits) into a probability distribution that sums up to 1.0.
+• Why does a simple Feedforward Neural Network (Dense) yield high accuracy on MNIST but poor accuracy on CIFAR-10?
+	• Answer: MNIST digits are simple, centered shapes where pixel spatial locations don't change much. CIFAR-10 features color variations, textures, and objects positioned anywhere in the frame. Flattening a complex image destroys spatial relationships, meaning a Convolutional Neural Network (CNN) is required for CIFAR-10.
+
+⚙️ Loss Functions & Math Optimization
+
+• Why did we choose sparse_categorical_crossentropy instead of regular categorical_crossentropy?
+	• Answer: We use sparse categorical crossentropy because our dataset labels are integers (e.g., 3 or 7). If our labels were one-hot encoded vectors (e.g., [0, 0, 0, 1, 0...]), we would use standard categorical_crossentropy.
+• What does np.argmax() do when parsing predictions?
+	• Answer: The model outputs an array of 10 probabilities. np.argmax() finds and returns the index of the highest probability value, which corresponds directly to the predicted class label.
+• What does model.summary() display, and why is it useful?
+	• Answer: It displays the structural layout of the model, including the output shape of every layer, the types of layers used, and the total number of trainable and non-trainable parameters.
+
+🚀 Performance & Training
+
+• What is an epoch? How does it differ from a batch?
+	• Answer: An epoch is one complete pass of the entire training dataset through the neural network. A batch is a small subset of the dataset (e.g., 32 samples) processed before updating the internal weights.
+• What is the Adam optimizer, and why is it preferred over standard SGD?
+	• Answer: Adam (Adaptive Moment Estimation) calculates adaptive learning rates for each parameter. It combines the advantages of RMSProp and Momentum, making it faster to converge and less sensitive to initial learning rate settings than standard Stochastic Gradient Descent (SGD).

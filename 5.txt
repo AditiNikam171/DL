@@ -1,0 +1,171 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Dense, Embedding, Input, Lambda
+from tensorflow.keras.models import Model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.utils import to_categorical
+
+# --- 1. Prepare the Dataset ---
+corpus = [
+    "the quick brown fox jumps over the lazy dog",
+    "the quick brown dog jumps over the lazy fox",
+    "a man is walking on the street",
+    "a dog is barking at the cat",
+    "the street is busy with people",
+]
+
+# --- 2. Tokenize and Create Word-to-Index Mappings ---
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(corpus)
+word_index = tokenizer.word_index
+vocab_size = len(word_index) + 1
+print(f"Vocabulary Size: {vocab_size}")
+
+# --- 3. Generate CBOW Training Data ---
+sequences = tokenizer.texts_to_sequences(corpus)
+window_size = 2
+data = []
+
+for sequence in sequences:
+    for i, word in enumerate(sequence):
+        # Create a list for context words (left and right within window)
+        context = []
+        for j in range(i - window_size, i + window_size + 1):
+            if j != i and 0 <= j < len(sequence):
+                context.append(sequence[j])
+        if context:
+            data.append((context, word))
+
+# Separate context arrays (X) and target word arrays (y)
+X_context = [item[0] for item in data]
+y_target = np.array([item[1] for item in data])
+
+# Pad the context sequences to ensure a uniform shape matrix
+max_len = max(len(x) for x in X_context)
+X_context_padded = pad_sequences(X_context, maxlen=max_len, padding="post")
+y_target_one_hot = to_categorical(y_target, num_classes=vocab_size)
+
+# --- 4. Build the CBOW Model (Functional API) ---
+embedding_dim = 100
+
+# Input placeholder layer
+input_context = Input(shape=(max_len,), name="Context_Input")
+
+# Embedding layer to convert word indices to dense continuous vectors
+embedding_layer = Embedding(
+    input_dim=vocab_size,
+    output_dim=embedding_dim,
+    name="Word_Embeddings",
+)(input_context)
+
+# Lambda layer to average the context embedding vectors
+lambda_layer = Lambda(
+    lambda x: K.mean(x, axis=1),
+    output_shape=(embedding_dim,),
+    name="Average_Context",
+)(embedding_layer)
+
+# Output classification layer layer using Softmax activation
+output_layer = Dense(
+    vocab_size, activation="softmax", name="Target_Prediction"
+)(lambda_layer)
+
+# Create and define structural architecture bounds
+cbow_model = Model(inputs=input_context, outputs=output_layer)
+
+# --- 5. Compile and Train the Model ---
+cbow_model.compile(
+    optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]
+)
+cbow_model.summary()
+
+print("\nTraining the CBOW model...")
+cbow_model.fit(X_context_padded, y_target_one_hot, epochs=500, verbose=0)
+print("Training complete.")
+
+# --- 6. Extract and Visualise Word Embeddings ---
+# Safely fetch the embedding matrix weights by name layer reference
+embedding_matrix = cbow_model.get_layer("Word_Embeddings").get_weights()[0]
+
+print("\nLearned Word Embeddings (First 5 Dimensions shown):")
+for word, idx in list(word_index.items())[:10]:  # Show first 10 words
+    if idx < vocab_size:
+        print(f"Word: '{word:<10}' Vector: {embedding_matrix[idx][:5]}")
+
+
+
+
+
+######explanation
+
+
+This code implements a Continuous Bag of Words (CBOW) model, which is a core Natural Language Processing (NLP) architecture designed to learn dense geometric vector representations of words (Word Embeddings).
+
+Paragraph 1: Text Tokenization and Numerical Sequencing
+
+The pipeline starts by creating a text corpus and mapping sentences into raw numeric tokens. The Tokenizer() indexes text vocabulary by tracking word counts. vocab_size = len(word_index) + 1 handles the total unique words plus an extra index allocated for zero padding placeholders (post-padding). Using texts_to_sequences(), raw character strings are transformed into list arrays containing unique dictionary integer indices.
+
+Paragraph 2: Sliding Context Window Matrix Generation
+
+The code iterates through the token lists to build training context spaces using a sliding window algorithm (window_size = 2). For every central target word array, the program scans up to two places backward (left) and two places forward (right), appending adjacent text indices into X_context while keeping the true word target inside y_target. Because sentences at edges have fewer neighbors, pad_sequences(..., padding='post') adds trailing zeros to force input features into a perfectly uniform mathematical grid layout (max_len). Target features undergo a one-hot categorical matrix mapping using to_categorical() to prepare for network routing.
+
+Paragraph 3: Embedding Map Projection and Feature Averaging (The Lambda Layer)
+
+The structural network pipeline utilizes the Keras Functional API. The Embedding layer functions as a giant lookup reference table that maps every sparse individual word integer token into a continuous, dense numerical vector coordinates array (embedding_dim = 100). The core property of a CBOW network is that it ignores the specific ordering of neighboring words. To capture this property, a Keras Lambda layer executes a mathematical reduction operation (K.mean(x, axis=1)), taking the vectors of all context words inside the window matrix and averaging them into a single summary vector of dimension 100.
+
+Paragraph 4: Dense Softmax Prediction and Target Matrix Cross-Entropy Loss
+
+The averaged feature representation array passes directly into a terminal Dense classification layer containing nodes equal to vocab_size. Driven by a softmax activation routine, the network normalizes raw logit calculations into absolute percentage estimates that predict which vocabulary token best fits the provided context gap. The system maps errors via a categorical_crossentropy loss engine, optimization updates are driven by adam, and the network undergoes a training run for 500 epochs to adjust the values inside the embedding weight matrices.
+
+Paragraph 5: Extracting the Learned Word Weights
+
+Once training stops, the internal weights of the layer explicitly named "Word_Embeddings" are extracted using .get_weights()[0]. These weights are the final word embeddings. Words that frequently share identical contexts (like "fox" and "dog") will end up with highly similar mathematical parameters in this coordinate system, converting abstract human text into spatial geometric relationships.
+
+
+
+#####viva
+
+
+
+
+1. Core Concepts of CBOW (Word2Vec)
+
+• What is CBOW, and how does it differ from Skip-Gram?
+	• Answer: CBOW predicts a target center word given its surrounding context words. Skip-Gram does the reverse: it predicts the surrounding context words given a target center word.
+• Why do we use word embeddings instead of simple one-hot encodings?
+	• Answer: One-hot vectors are sparse, high-dimensional, and do not capture semantic or syntactic relationships between words. Embeddings map words to dense, low-dimensional continuous vector spaces where semantically similar words are close to each other.
+• What does the embedding_dim = 100 parameter mean?
+	• Answer: It defines the size (number of features/dimensions) of the dense vector representation learned for each word in the vocabulary.
+
+2. Data Preprocessing & Tokenization
+
+• Why do we add 1 to len(word_index) when defining vocab_size (vocab_size = len(word_index) + 1)?
+	• Answer: Keras Tokenizer reserves index 0 for padding (or out-of-vocabulary tokens), meaning word indices start at 1 up to len(word_index). Thus, the total vocabulary size needs an extra slot.
+• How does the sliding window logic generate (context, target) pairs?
+	• Answer: For each word at index i in a sequence, it looks backward and forward up to window_size = 2 (excluding the center word itself) to collect context word indices.
+• Why is padding (pad_sequences) required for X_context?
+	• Answer: Different context windows might have varying numbers of context words (especially near the edges of a sentence). Padding ensures all input samples have a uniform shape (max_len) so they can be stacked into a proper NumPy matrix for the neural network.
+• Why do we use to_categorical on y_target?
+	• Answer: Since we frame CBOW as a multi-class classification problem over the entire vocabulary using categorical cross-entropy loss, the target word index must be converted into a one-hot encoded vector of size vocab_size.
+
+3. Keras Architecture & Layers
+
+• Why did you use the Keras Functional API (Model(inputs=..., outputs=...)) instead of the Sequential API?
+	• Answer: We need a custom operation in the middle—specifically averaging the word embeddings across the context window using a Lambda layer—which is easier to handle with multi-input/custom flow in the Functional API.
+• What does the Embedding layer actually learn during training?
+	• Answer: It learns a lookup weight matrix of shape (vocab_size, embedding_dim). Each row corresponds to the dense vector representation of a specific word index, which gets updated via backpropagation.
+• What is the purpose of the Lambda layer (K.mean(x, axis=1))?
+	• Answer: It takes the batch of embedding vectors for all context words of a given sample and averages them element-wise along the sequence axis to create a single context vector representation.
+• Why is the final output layer a Dense layer with Softmax activation and vocab_size units?
+	• Answer: The softmax layer outputs a probability distribution across the entire vocabulary, and the class with the highest probability corresponds to the predicted target word.
+
+4. Training & Implementation Details
+
+• Why is the loss function set to categorical_crossentropy and the optimizer to adam?
+	• Answer: Categorical cross-entropy is standard for multi-class classification where targets are one-hot encoded. Adam is an adaptive learning rate optimizer that generally converges fast and works well for sparse/dense gradient updates.
+• Why might this model perform poorly or overfit on the provided corpus?
+	• Answer: The dataset (corpus) is tiny (only 5 short sentences), meaning the model doesn't see enough contextual diversity to learn meaningful, generalizable semantic embeddings.
+• What does cbow_model.get_layer("Word_Embeddings").get_weights()[0] return?
+	• Answer: It extracts the raw 2D weight matrix (vocab_size × embedding_dim) from the Embedding layer, where row idx represents the learned embedding vector for that word.

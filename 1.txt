@@ -1,0 +1,212 @@
+import tensorflow as tf
+
+# Define inputs and trainable variables
+x = tf.constant([[1.0, 2.0]])
+W = tf.Variable([[0.5], [0.5]])
+b = tf.Variable([0.1])
+
+# Define the forward pass function
+def forward(x):
+    z = tf.matmul(x, W) + b
+    return tf.nn.relu(z)
+
+# Test the forward pass
+output = forward(x)
+print("Output:", output.numpy())
+
+# Track operations for automatic differentiation
+with tf.GradientTape() as tape:
+    y = forward(x)
+    loss = tf.reduce_mean(tf.square(y - 1.0))
+
+# Calculate and print gradients with respect to W and b
+grads = tape.gradient(loss, [W, b])
+print("Gradient w.r.t. W:\n", grads[0].numpy())
+print("Gradient w.r.t. b:", grads[1].numpy())
+
+
+
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+# Load and preprocess the MNIST dataset
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+x_train, x_test = x_train / 255.0, x_test / 255.0
+
+# Define the network architecture using the updated Keras standard
+model = keras.Sequential([
+    layers.Input(shape=(28, 28)),
+    layers.Flatten(),
+    layers.Dense(128, activation='relu'),
+    layers.Dropout(0.2),
+    layers.Dense(10, activation='softmax')
+])
+
+# Compile the model
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+# Train the model
+model.fit(x_train, y_train, epochs=3, batch_size=32, validation_split=0.1)
+
+# Evaluate on the test dataset
+test_loss, test_acc = model.evaluate(x_test, y_test)
+print(f"\nTest Accuracy: {test_acc:.4f}")
+
+
+import theano
+import theano.tensor as T
+import numpy as np
+x = T.dmatrix('x')
+W = T.dmatrix('W')
+b = T.dvector('b')
+z = T.dot(x, W) + b
+y = T.nnet.relu(z)
+loss = T.mean((y - 1) ** 2)
+grad_W = T.grad(loss, W)
+f = theano.function(inputs=[x, W, b], outputs=y)
+grad_f = theano.function(inputs=[x, W, b], outputs=grad_W)
+x_val = np.array([[1.0, 2.0]])
+W_val = np.array([[0.5], [0.5]])
+b_val = np.array([0.1])
+print("Output:", f(x_val, W_val, b_val))
+print("Gradient:", grad_f(x_val, W_val, b_val))
+
+
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+# Part 1: Manual Forward Pass and Gradients
+x = torch.tensor([[1.0, 2.0]])
+W = torch.tensor([[0.5], [0.5]], requires_grad=True)
+b = torch.tensor([0.1], requires_grad=True)
+
+z = torch.matmul(x, W) + b
+y = torch.relu(z)
+loss = torch.mean((y - 1.0) ** 2)
+
+loss.backward()
+
+print("Gradient w.r.t. W:\n", W.grad)
+print("Gradient w.r.t. b:\n", b.grad)
+
+
+# Part 2: Custom nn.Module Neural Network
+class SimpleNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(2, 4)
+        self.fc2 = nn.Linear(4, 1)
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        return torch.sigmoid(self.fc2(x))
+
+
+# Initialize components
+model = SimpleNet()
+optimizer = optim.SGD(model.parameters(), lr=0.01)
+criterion = nn.MSELoss()
+
+# Single optimization step
+output = model(x)
+loss = criterion(output, torch.tensor([[1.0]]))
+
+optimizer.zero_grad()
+loss.backward()
+optimizer.step()
+
+print("\nLoss after one step:", loss.item())
+
+
+
+#####Explanation
+
+Before looking at the code, here is what is happening mathematically in every single one of these scripts:
+1. The Linear Equation (\(z = x \cdot W + b\)): The input data (\(x\)) is multiplied by the weights (\(W\)) and a bias (\(b\)) is added.
+2. Activation Function (ReLU): The result \(z\) passes through a Rectified Linear Unit (ReLU). ReLU keeps positive numbers exactly as they are, and turns negative numbers into \(0\).
+3. Loss Function (MSE): The code checks how far the network's output (\(y\)) is from our target goal (\(1.0\)) using Mean Squared Error.
+4. Gradients (Derivatives): The code calculates "gradients". Gradients tell us the direction and amount we need to change our weights (\(W\)) and bias (\(b\)) to lower the error.
+
+1. The TensorFlow Code (Dynamic Graph / Eager Execution)
+
+TensorFlow 2.x uses Eager Execution, meaning operations happen immediately when you call them, just like regular Python.
+• tf.constant and tf.Variable: Constants are fixed inputs (\(x\)). Variables (\(W\) and \(b\)) are parameters that the computer is allowed to change and train.
+• tf.GradientTape() as tape: TensorFlow doesn't automatically calculate gradients because it takes up computer memory. The "Tape" acts like a digital recorder. It watches and records every math operation happening inside its block.
+• tape.gradient(loss, [W, b]): The tape plays backward to calculate the exact derivatives (gradients) of the loss with respect to \(W\) and \(b\).
+
+2. The Keras Code (High-Level Framework)
+
+Keras sits on top of TensorFlow. Instead of making you write the math equations yourself, it lets you stack ready-made building blocks (layers).
+• keras.datasets.mnist.load_data(): Downloads a famous dataset of 60,000 handwritten digits (0 through 9).
+• x_train / 255.0: Normalises the images. Raw pixels range from 0 (black) to 255 (white). Dividing by 255 squishes them between 0.0 and 1.0, which helps neural networks learn much faster.
+• keras.Sequential([...]): A linear stack of layers. Data flows from top to bottom.
+	• Input(shape=(28, 28)): Tells the model to expect a 2D image grid.
+	• Flatten(): Unrolls the 28x28 grid into a single long line of 784 pixels.
+	• Dense(128, activation='relu'): A layer of 128 artificial neurons looking for patterns.
+	• Dropout(0.2): Randomly turns off 20% of neurons during training. This forces the network to not rely too heavily on any single pixel (prevents overfitting).
+• model.compile(...): Configures the learning strategy. It sets the brain/optimizer (adam) and how it measures mistakes (loss).
+• model.fit(...): The actual training loop. It loops through the data 3 times (epochs) in groups of 32 images (batch_size).
+
+3. The PyTorch Code (Dynamic / Imperative)
+
+PyTorch is heavily used in research. It feels very similar to standard NumPy but with GPU support and automatic differentiation.
+• requires_grad=True: This is PyTorch's version of the gradient tape. It tells PyTorch: "Keep an eye on this tensor, because I will need its gradient later."
+• loss.backward(): This single command triggers the chain rule of calculus. It starts at the loss and calculates the gradients for every tensor that had requires_grad=True. The results are stored inside W.grad and b.grad.
+• class SimpleNet(nn.Module): The standard way to build networks in PyTorch. You define the layers in __init__ and map out how data flows through them in the forward function.
+• optimizer.zero_grad(): PyTorch accumulates (adds up) gradients by default. You must clear out old gradients before calculating new ones, otherwise your model will get confused.
+
+4. The Theano Code (Static Symbolic Graph)
+
+Theano behaves completely differently from the other three. It is a symbolic library. It doesn't actually calculate anything at first—it just builds a blueprint.
+• T.dmatrix('x') and T.dvector('b'): These are not numbers. They are empty placeholders (like \(x\) and \(y\) in a school algebra equation).
+• grad_W = T.grad(loss, W): Theano computes the derivative symbolically by looking at the mathematical graph blueprint, long before any data is passed.
+• theano.function(...): This is the compilation step. Theano takes your abstract algebra blueprint and compiles it into a highly optimized, fast C-code function.
+• f(x_val, W_val, b_val): Only at the very end do we pass actual numeric NumPy arrays into the compiled function to get a real answer.
+
+
+######Viva 
+
+Group 1: Core Concepts & Mathematics
+
+• What does ReLU stand for, and what does it mathematically do?
+	• Answer: Rectified Linear Unit. It outputs the input directly if it is positive, otherwise, it outputs zero. Mathematically: \(f(x) = \max(0, x)\).
+• Why do we divide the MNIST pixel values by 255.0?
+	• Answer: To normalize the data [0.0, 1.0]. Neural networks learn much faster and more stably when input features are scaled to small, uniform ranges.
+• What is a gradient in deep learning?
+	• Answer: A vector of partial derivatives that points in the direction of the steepest increase of the loss function. We move in the opposite direction of the gradient to minimize our errors.
+• What is the purpose of the Dropout layer?
+	• Answer: To prevent overfitting. It randomly deactivates a fraction of neurons during training, forcing the network to learn redundant representations rather than relying too heavily on specific pathways.
+
+Group 2: TensorFlow & Keras
+
+• What is the purpose of tf.GradientTape in TensorFlow?
+	• Answer: It acts as a digital recorder that tracks forward pass operations automatically. TensorFlow uses this recorded graph to compute gradients via reverse-mode automatic differentiation.
+• What is the difference between TensorFlow and Keras?
+	• Answer: TensorFlow is a low-level framework providing core tensor math operations and graph computation. Keras is a high-level API built on top of TensorFlow to make designing, compiling, and training deep learning models faster and easier.
+• What does model.compile() do in Keras?
+	• Answer: It configures the learning process before training starts. It defines the optimizer (how to update weights), the loss function (how to measure mistakes), and the metrics (how to evaluate performance).
+
+Group 3: PyTorch
+
+• What does requires_grad=True mean in PyTorch?
+	• Answer: It flags a tensor so PyTorch tracks all operations performed on it. This tells the autograd engine to compute its gradient when .backward() is called.
+• Why must you run optimizer.zero_grad() before calculating new gradients in PyTorch?
+	• Answer: Because PyTorch accumulates (adds up) gradients on every backward pass by default. If you don't clear the old gradients, the new updates will be mathematically incorrect.
+• What does loss.backward() do under the hood?
+	• Answer: It computes the gradient of the loss with respect to all learnable parameters (tensors with requires_grad=True) using the calculus chain rule.
+
+Group 4: Theano
+
+• What makes Theano fundamentally different from PyTorch and TensorFlow 2.x?
+	• Answer: Theano relies on a static symbolic graph. You define abstract mathematical equations using placeholders (T.dmatrix) rather than concrete values. Nothing is calculated until the graph is explicitly compiled into a function.
+• What does theano.function do?
+	• Answer: It takes the abstract symbolic mathematical graph you designed and compiles it into highly optimized machine code (C code) that can process actual NumPy array inputs.
+• What is the status of Theano today?
+	• Answer: Theano was officially discontinued in 2017, and its direct, actively maintained open-source successor is called PyTensor.
